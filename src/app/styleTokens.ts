@@ -151,7 +151,6 @@ export const taskGroupTitleStyle = { ...f, fontWeight: 600, letterSpacing: "-0.3
  *   item        : 항목(=클릭 영역·hover 배경) 폭. 아이콘 좌우 안쪽 여백 (item − icon) / 2 = pad 와 같다.
  *   pad         : 항목 안쪽 여백(상하좌우 동일) — hover 배경이 아이콘·이름을 고르게 감싼다.
  *   space       : 아이콘 ↔ 이름, 항목 ↔ 항목 간격(같은 값 하나).
- *   groupGap    : 그룹 ↔ 구분선 간격(구분선 양옆). space 보다 넓다.
  *   captionGap  : "무료 편집기 바로 열기" 라벨 ↔ 아이콘 줄 — space 보다 넓다.
  *   모서리는 radius.card(hover 배경 16)를 그대로 쓴다.
  *   badgeTop/badgeRight: NEW 배지를 아이콘 칸 우상단 기준으로 고정하는 거리.
@@ -161,14 +160,12 @@ export const editorEntry = {
   item: 76,
   pad: 6,
   space: 8,
-  groupGap: 16,
   captionGap: 10,
   /** 이름 글자 — 500·본문 회색, 크기는 좁은 칸에 맞춰 14px 고정 */
   labelSize: 14,
   labelLineHeight: 20,
   /** 설명 라벨 — typography.caption(12px·500) 크기에 color.text.secondary */
   captionLineHeight: 16,
-  dividerHeight: 48,
   badgeTop: -6,
   badgeRight: -12,
   /** 검색창 ↔ 아이콘 줄 — 부모 세로 간격(24px, App HomeScreen)에 더하는 값. 합 48px */

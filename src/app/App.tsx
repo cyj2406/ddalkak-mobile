@@ -24,7 +24,7 @@ import HomeOnboarding from "@/app/components/onboarding/HomeOnboarding";
 import { MobileEditorNotice } from "@/app/components/viewer/MobileEditorNotice";
 import { ScrollableChips } from "@/app/components/common/ScrollableChips";
 import { Button } from "@/app/components/common/Button";
-import { ToastHost } from "@/app/components/common/Toast";
+import { ToastHost, showToast } from "@/app/components/common/Toast";
 import { IconButton } from "@/app/components/common/IconButton";
 import { useFocusTrap } from "@/app/components/common/useFocusTrap";
 import ClampedText from "@/app/components/common/ClampedText";
@@ -5420,7 +5420,9 @@ export default function App() {
   const [homeVariant] = useHomeVariant();
   const openEditor = (kind: EditorKind) => {
     if (kind === "layer") { setLayerEditorOpen(true); return; }
-    const target: Record<Exclude<EditorKind, "layer">, [WorkspaceCategory, string]> = {
+    // 도구모음 편집기와 하나씩 연결하기 전까지 새 항목은 안내만(2026-11-13)
+    if (kind === "pdf" || kind === "uidesign") { showToast(`${kind === "pdf" ? "PDF" : "UI 디자인"} 편집기는 준비 중이에요.`); return; }
+    const target: Record<Exclude<EditorKind, "layer" | "pdf" | "uidesign">, [WorkspaceCategory, string]> = {
       image: ["image", "전체"], word: ["docs", "워드"], hangul: ["docs", "한글"],
       excel: ["docs", "엑셀"], ppt: ["ppt", "전체"], video: ["video", "영상"],
     };

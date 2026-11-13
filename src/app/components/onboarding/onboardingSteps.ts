@@ -44,10 +44,9 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: "editor-row",
     target: sel("editor-row"),
-    // 이 단계 동안만 섹션 라벨의 '무료'가 브랜드 배지로 강조된다(EditorQuickLinks — onboardingStore.stepId)
-    // 편집기 안의 AI 기능은 유료 — '전부 무료'가 아니라 무료 범위를 '열고 고치는 것'으로 한정한다
-    title: "열고 고치는 건 무료예요",
-    body: "워드·한글·PPT·엑셀을 설치 없이 웹에서 바로 편집하세요.",
+    // 2026-11-13 라벨에서 '무료'를 빼면서(→ '편집기 바로 열기') 배지 강조와 무료 문구도 뺐다
+    title: "편집기를 바로 써 보세요",
+    body: "한글·워드·PPT·PDF부터 디자인·영상까지, 설치 없이 웹에서 열어 편집해요.",
     scroll: "center",
     placement: "bottom",
   },
