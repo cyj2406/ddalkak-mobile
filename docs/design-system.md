@@ -373,6 +373,7 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 - `src/app/App.tsx`의 `CreditHistoryScreen`(잔액 카드, 리스트 카드, 필터 행, "+크레딧 충전" 버튼 — 화면 구조·필터·정렬·뒤로가기 등 기존 동작은 그대로 유지)
 - `src/app/components/common/{Button,Tabs,ScrollableChips,Badge,Modal}.tsx`(공통 컴포넌트 자체)
 - `src/app/state/subscription.ts`(신규 — 구독·결제·크레딧 버킷 mock 스토어)
+- `src/app/components/mypage/*`(마이페이지, 2026-11-13 — 아래 "마이페이지" 절)
 - 서비스 전역의 브랜드 블루 색상값(아래 "1) 브랜드 블루" 참고) — 홈/검색/템플릿 화면의
   **레이아웃·문구는 건드리지 않고 색상값만** `#2563eb`→`color.brand`, `#1d4ed8`→`color.brandHover`,
   `#eff5ff`→`color.surface.accent`로 맞췄다. 대상 파일: `HomeSearch.tsx`,
@@ -385,6 +386,21 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 결정(`#2563eb` 계열만 해당) 범위 밖이라 손대지 않았다 — 새로 발견된 네 번째 블루
 계열로 기록만 해 둔다. **홈 화면의 레이아웃은 이후 재구성했다 — 아래 "홈 화면 재구성"
 참고.**
+
+## 마이페이지 (2026-11-13) — `src/app/components/mypage/`, `src/app/state/profile.ts`
+
+공동 작업 기능으로 이름·사진이 다른 사람 화면에 보이게 되면서 추가했다. 진입: 프로필 메뉴 맨 위 "마이페이지"(`UserRound` 아이콘) → `screen = "mypage"`(뒤로 가기 있음).
+
+- **구조**: `PageContainer` + `PageHeader` → 프로필 카드(사진·이름·플랜 배지) / 기본 정보 / 공동 작업 / 계정. 1200px 이상은 오른쪽 320px에
+  "공동 작업자에게 이렇게 보여요" 미리보기가 sticky로 붙고, 그 아래 폭에서는 공동 작업 카드 안으로 들어간다.
+- **편집 방식(Canva 계정 설정)**: `라벨 | 값 | 수정` 한 줄 → 누르면 그 줄만 `InputField` singleline(48px) + 글자 수 + 취소/저장.
+  한 번에 한 줄만 열린다. 페이지 전체 저장 버튼 없음. Enter 저장(한글 조합 중 제외), Esc 취소. 이름만 필수(20자), 직무 20자, 소개 40자.
+- **사진(Notion·Canva)**: 아바타 카메라 버튼 / "사진 변경 · 삭제". 가운데 기준 256px 정사각형 JPEG로 줄여 저장. 삭제하면 이니셜 + 협업 색상.
+- **협업 색상(Figma·Miro 멀티플레이어)**: `COLLAB_COLORS` 8색(`state/profile.ts`). UI 색이 아니라 사람 구분용 데이터 색이라 `color` 토큰에 넣지 않았다 — 다른 화면 UI에 쓰지 말 것.
+- **팀·초대(Canva·Figma)**: 참여 중인 팀 + 역할 `Badge`(소유자 brand / 그 외 neutral), 받은 초대 수락·거절.
+- **공통 적용**: 프로필 메뉴·상단 아바타의 이름·이메일·사진이 하드코딩에서 `useProfile()`로 바뀌었다 — 마이페이지에서 고치면 바로 반영. 아바타는 `mypage/ProfileAvatar`.
+- **한계**: 서버 없음 — 값은 이 브라우저 localStorage(`ddalkkak.profile.v1`)에만. 팀·초대는 예시 데이터. 계정 삭제는 토스트 안내만.
+- 새 토큰 없음. 줄 끝 "수정" 텍스트 버튼은 프로필 메뉴 "내역 보기 ›"와 같은 모양(이 화면 로컬 클래스).
 
 ## 에디터 중심 홈 시안 (2026-11-13, 브랜치 `feat/editor-centric-home`)
 

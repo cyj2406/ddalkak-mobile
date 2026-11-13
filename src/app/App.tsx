@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo, type ReactNode } from "react";
-import { HelpCircle, Settings as SettingsIcon, Users, Mail, LogOut, Palette, Bell, Brain, Coins, CreditCard, Monitor, Sun, Moon, FileText, FileVideo, FileSpreadsheet, FileType2, Compass, Image as ImageIcon, X as XIcon, Play, Volume2, Maximize2, Minimize2, BookOpen, Search, Plus, Upload, Check } from "lucide-react";
+import { HelpCircle, Settings as SettingsIcon, UserRound, Users, Mail, LogOut, Palette, Bell, Brain, Coins, CreditCard, Monitor, Sun, Moon, FileText, FileVideo, FileSpreadsheet, FileType2, Compass, Image as ImageIcon, X as XIcon, Play, Volume2, Maximize2, Minimize2, BookOpen, Search, Plus, Upload, Check } from "lucide-react";
 
 // ── 공통 에셋 ──────────────────────────────────────────────────────────────────
 import svgPaths from "@/imports/새대화딸깍/svg-yz49hawimu";
 import svgCard from "@/imports/Container/svg-n3rzud15nf";
 // Frame svg paths are identical to Container's — svgCard covers all keys
 import imgImageNet from "@/imports/새대화딸깍/70598a9173139973c519fbc9c881094e41ef9297.png";
-import imgUserAvatar from "@/imports/새대화딸깍/ec4bf4c83826b512a10ccb46952ef28cdb24b8d8.png";
 import imgLogoMark from "@/assets/brand/logo-mark.png";
 
 import TabletEditorShell from "@/app/components/viewer/TabletEditorShell";
@@ -54,10 +53,13 @@ import { PricingPage, type PricingTab } from "@/app/components/pricing/PricingPa
 import { SubscriptionCompletePage } from "@/app/components/pricing/SubscriptionCompletePage";
 import { SettingsCreditTab } from "@/app/components/settings/SettingsCreditTab";
 import { SettingsBillingTab } from "@/app/components/settings/SettingsBillingTab";
+import { MyPage } from "@/app/components/mypage/MyPage";
+import { ProfileAvatar } from "@/app/components/mypage/ProfileAvatar";
+import { useProfile } from "@/app/state/profile";
 
 
 // ─── 타입 ──────────────────────────────────────────────────────────────────────
-type Screen = "home" | "templates" | "cardnews-editor" | "image-ai" | "landing-ai" | "forms-ai" | "forms-fill" | "docs-ai" | "audio-ai" | "ppt-ai" | "video-ai" | "favorites" | "mywork" | "notifications-all" | "search" | "request-help" | "pricing" | "subscription-complete";
+type Screen = "home" | "templates" | "cardnews-editor" | "image-ai" | "landing-ai" | "forms-ai" | "forms-fill" | "docs-ai" | "audio-ai" | "ppt-ai" | "video-ai" | "favorites" | "mywork" | "notifications-all" | "search" | "request-help" | "pricing" | "subscription-complete" | "mypage";
 export type WorkspaceCategory = "docs" | "ppt" | "video" | "landing" | "image" | "detail";
 const WS_LABEL: Record<WorkspaceCategory, string> = { docs: "문서", ppt: "PPT", video: "영상", landing: "랜딩페이지", image: "이미지", detail: "상세페이지" };
 const WS_COLOR: Record<WorkspaceCategory, string> = { docs: "#3B82F6", ppt: "#8B5CF6", video: "#EF4444", landing: "#22C55E", image: "#F59E0B", detail: "#EC4899" };
@@ -1173,8 +1175,10 @@ function SidebarDrawer({ open, onClose, currentScreen, onNavigate, onSettingsOpe
 /** 프로필 메뉴 항목 공통 클래스 — hover 배경 + 키보드 focus 링(이 버튼들엔 지금까지 둘 다 없었다). */
 const PROFILE_MENU_ROW_CLASS = "w-full flex items-center gap-3.5 px-5 py-3.5 outline-none transition-colors duration-150 hover:bg-[#f8fafc] focus-visible:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]";
 
-function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onSettingsOpen }: {
+function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onSettingsOpen, onMyPageClick }: {
   onCreditClick?: () => void;
+  /** 마이페이지(프로필·공동 작업·계정) — 2026-11-13 */
+  onMyPageClick?: () => void;
   /** 잔액 옆 "내역 보기 ›" — 설정 > 크레딧·사용 내역을 바로 연다. */
   onHistoryClick?: () => void;
   onStartTutorial?: () => void;
@@ -1182,6 +1186,8 @@ function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onS
 }) {
   const [open, setOpen] = useState(false);
   const [creditBalance] = useCreditBalance();
+  // 이름·이메일·아바타는 마이페이지에서 고친 값을 그대로 따른다(state/profile.ts).
+  const profile = useProfile();
   // 이름 옆 플랜 배지 — 실제 구독 스토어 상태를 그대로 표시한다(조회 전에는 아무
   // 배지도 달지 않고, 해지 예정이어도 이용 기간이 남아 있으면 그 플랜을 그대로 보여준다 —
   // hasCurrentPlan이 "active"/"cancel_scheduled" 둘 다 포함하는 이유).
@@ -1207,6 +1213,7 @@ function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onS
   }, [open]);
 
   const menuTop = [
+    { icon: <UserRound size={19} strokeWidth={1.6} color="#9ca3af" />, label: "마이페이지", onClick: onMyPageClick ? () => { setOpen(false); onMyPageClick(); } : undefined },
     { icon: <HelpCircle size={19} strokeWidth={1.6} color="#9ca3af" />, label: "튜토리얼 다시 보기", onClick: onStartTutorial ? () => { setOpen(false); onStartTutorial(); } : undefined },
     { icon: <SettingsIcon size={19} strokeWidth={1.6} color="#9ca3af" />, label: "설정", onClick: onSettingsOpen ? () => { setOpen(false); onSettingsOpen(); } : undefined },
   ];
@@ -1222,14 +1229,14 @@ function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onS
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="최유정 계정 메뉴"
-        title="최유정"
+        aria-label={`${profile.name} 계정 메뉴`}
+        title={profile.name}
         // 터치 영역 44×44(투명), 보이는 아바타는 32px — 크기를 키우지 않고 누르기 쉬운 영역만 넓힌다.
         className="group size-11 flex items-center justify-center rounded-full shrink-0 outline-none"
         style={{ background: "transparent" }}
       >
-        <span className="block rounded-full overflow-hidden border border-[#c7d2fe] transition-shadow duration-150 group-hover:ring-2 group-hover:ring-offset-1 group-hover:ring-[#c7d2fe] group-focus-visible:ring-2 group-focus-visible:ring-offset-1 group-focus-visible:ring-[#4f7bff]" style={{ width: 32, height: 32, background: "#e0e7ff" }}>
-          <img alt="" className="size-full object-cover" src={imgUserAvatar} />
+        <span className="block rounded-full overflow-hidden border border-[#c7d2fe] transition-shadow duration-150 group-hover:ring-2 group-hover:ring-offset-1 group-hover:ring-[#c7d2fe] group-focus-visible:ring-2 group-focus-visible:ring-offset-1 group-focus-visible:ring-[#4f7bff]" style={{ width: 32, height: 32 }}>
+          <ProfileAvatar profile={profile} size={30} />
         </span>
       </button>
       {open && (
@@ -1242,7 +1249,7 @@ function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onS
         >
           <div className="px-5 pt-5 pb-4">
             <div className="flex items-center gap-2">
-              <p style={{ ...f, fontWeight: 700, fontSize: 17, color: "#0a0a0a", letterSpacing: "-0.5px" }}>최유정</p>
+              <p style={{ ...f, fontWeight: 700, fontSize: 17, color: "#0a0a0a", letterSpacing: "-0.5px" }} className="truncate">{profile.name}</p>
               {/* 조회 전(아직 스토어를 안 읽었다는 뜻은 아니지만, 구독 여부를 확정하기
                   전까지는)에는 배지를 달지 않는다 — Free를 임의로 못 박지 않는다. */}
               {hasCurrentPlan && currentPlan && (
@@ -1254,7 +1261,7 @@ function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onS
                 </span>
               )}
             </div>
-            <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", marginTop: 2 }}>cyj2406@gmail.com</p>
+            <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{profile.email}</p>
           </div>
           {/* 크레딧 영역 — 프로필/크레딧/일반 메뉴 세 영역을 구분선이 아니라 여백과 배경
               차이로 그룹핑한다. 카드 배경은 브랜드 톤을 아주 옅게 쓰는 surface.accent,
@@ -1330,7 +1337,7 @@ function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onS
   );
 }
 
-function TopBar({ onMenuOpen, onBack, showBack, onCreditClick, onHistoryClick, onBellClick, bellRef, brand = true, onStartTutorial, onSettingsOpen }: {
+function TopBar({ onMenuOpen, onBack, showBack, onCreditClick, onHistoryClick, onBellClick, bellRef, brand = true, onStartTutorial, onSettingsOpen, onMyPageClick }: {
   onMenuOpen: () => void; onBack?: () => void; showBack?: boolean;
   onCreditClick?: () => void; onHistoryClick?: () => void; onBellClick?: () => void;
   bellRef?: React.RefObject<HTMLButtonElement | null>;
@@ -1342,6 +1349,7 @@ function TopBar({ onMenuOpen, onBack, showBack, onCreditClick, onHistoryClick, o
   brand?: boolean;
   onStartTutorial?: () => void;
   onSettingsOpen?: () => void;
+  onMyPageClick?: () => void;
 }) {
   return (
     // 상단바 규격(2026-10-02) — 높이 56px(기존 레이아웃이 calc(100vh - 56px) 등으로 의존해 유지,
@@ -1362,7 +1370,7 @@ function TopBar({ onMenuOpen, onBack, showBack, onCreditClick, onHistoryClick, o
           <IconBell size={22} />
           <div aria-hidden className="absolute top-[9px] left-[25px] bg-[#2b7fff] rounded-full size-2 ring-2 ring-[#f8fafc]" />
         </IconButton>
-        <ProfileMenuButton onCreditClick={onCreditClick} onHistoryClick={onHistoryClick} onStartTutorial={onStartTutorial} onSettingsOpen={onSettingsOpen} />
+        <ProfileMenuButton onCreditClick={onCreditClick} onHistoryClick={onHistoryClick} onStartTutorial={onStartTutorial} onSettingsOpen={onSettingsOpen} onMyPageClick={onMyPageClick} />
       </div>
     </header>
   );
@@ -5512,7 +5520,7 @@ export default function App() {
   const inWorkspace = !!workspace;
   useEffect(() => { setSidebarCollapsed(inWorkspace); }, [inWorkspace]);
 
-  const isSubScreen = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai", "notifications-all", "search", "templates", "cardnews-editor", "request-help", "pricing", "subscription-complete"].includes(screen);
+  const isSubScreen = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai", "notifications-all", "search", "templates", "cardnews-editor", "request-help", "pricing", "subscription-complete", "mypage"].includes(screen);
 
   // 튜토리얼 다시 보기(프로필 메뉴) — 홈으로 돌아가 홈 온보딩을 1단계부터 다시 띄운다(2026-10-30).
   // 예전 작성 화면 투어(TutorialTour, 7단계)는 이 진입점에서 빠졌다 — 컴포넌트 파일은 common/ 에 남아 있다.
@@ -5553,6 +5561,7 @@ export default function App() {
         bellRef={bellRef}
         onStartTutorial={startTutorial}
         onSettingsOpen={() => openSettingsAt("화면 설정")}
+        onMyPageClick={() => navigate("mypage")}
       />
       {/* 홈 시안 전환(검토용) — current 는 기존 홈 그대로. docs/home-editor-redesign.md */}
       {screen === "home" && homeVariant === "a" && (
@@ -5689,6 +5698,7 @@ export default function App() {
           결제 실패 알림·"구독 및 결제 관리"는 구독·결제 탭, "다시 구독하기"/"크레딧
           충전"은 구매 화면으로 바로 연다), pricingNavKey를 key로 넘겨 이미 이 화면에
           머무는 중에 다시 openPricing()을 불러도 매번 그 탭/화면으로 확실히 연다. */}
+      {screen === "mypage" && <MyPage onOpenSettings={() => openSettingsAt("화면 설정")} />}
       {screen === "pricing" && (
         <PricingPage
           key={pricingNavKey}
