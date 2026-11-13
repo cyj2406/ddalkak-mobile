@@ -386,6 +386,14 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 계열로 기록만 해 둔다. **홈 화면의 레이아웃은 이후 재구성했다 — 아래 "홈 화면 재구성"
 참고.**
 
+## 에디터 중심 홈 시안 (2026-11-13, 브랜치 `feat/editor-centric-home`)
+
+기존 홈(`HomeScreen`)은 그대로 두고, `src/app/components/home/variants/`에 시안을 따로 만든다.
+`?home=a|b` 또는 화면 왼쪽 아래 스위처로 바꿔 본다. 기획·시안 설명·한계는
+[`docs/home-editor-redesign.md`](home-editor-redesign.md)에 있다. 시안 코드는 기존 토큰(`color`, `radius`, `shadow`,
+`f`)과 `Badge`·`HomeSectionHeader`·`showToast`를 재사용하고, 새 토큰은 추가하지 않았다.
+**시안이 확정되기 전까지 이 폴더의 패턴을 서비스 기준으로 보지 말 것.**
+
 ## 홈 화면 재구성 (2026-09-17)
 
 메인 홈을 "제목+검색 → 대표 카테고리 → (선택 시) 세부 기능 → 바로 시작하기 좋은

@@ -39,6 +39,10 @@ import { EditorQuickLinks, type EditorKind } from "@/app/components/home/EditorQ
 import SearchResultsScreen from "@/app/components/home/SearchResultsScreen";
 import AllTemplatesScreen from "@/app/components/home/AllTemplatesScreen";
 import CardNewsEditorScreen from "@/app/components/home/CardNewsEditorScreen";
+import HomeLauncher from "@/app/components/home/variants/HomeLauncher";
+import HomeEditorFirst from "@/app/components/home/variants/HomeEditorFirst";
+import { HomeVariantSwitcher } from "@/app/components/home/variants/HomeVariantSwitcher";
+import { useHomeVariant } from "@/app/components/home/variants/homeVariants";
 import RequestHelpScreen, { type RequestHandoff } from "@/app/components/home/RequestHelpScreen";
 import { RequestCardsPanel } from "@/app/components/workspace/RequestCardsPanel";
 import { getTaskById, type TaskTemplate } from "@/app/data/tasks";
@@ -5405,6 +5409,7 @@ export default function App() {
   /** 레이어 분리 — 홈 아이콘 줄에서 바로 여는 이미지 미니 에디터(텍스트 분리 패널 포함). 워크스페이스를 거치지 않는다. */
   const [layerEditorOpen, setLayerEditorOpen] = useState(false);
   /** 홈 아이콘 줄 → 포맷 에디터(빈 템플릿 워크스페이스). 레이어 분리만 이미지 미니 에디터를 바로 연다. */
+  const [homeVariant] = useHomeVariant();
   const openEditor = (kind: EditorKind) => {
     if (kind === "layer") { setLayerEditorOpen(true); return; }
     const target: Record<Exclude<EditorKind, "layer">, [WorkspaceCategory, string]> = {
@@ -5549,7 +5554,14 @@ export default function App() {
         onStartTutorial={startTutorial}
         onSettingsOpen={() => openSettingsAt("화면 설정")}
       />
-      {screen === "home" && (
+      {/* 홈 시안 전환(검토용) — current 는 기존 홈 그대로. docs/home-editor-redesign.md */}
+      {screen === "home" && homeVariant === "a" && (
+        <HomeLauncher onOpenEditor={openEditor} onOpenCardNews={() => navigate("cardnews-editor")} onSearch={openSearch} onHelp={() => navigate("request-help")} onViewAllTemplates={() => navigate("templates")} />
+      )}
+      {screen === "home" && homeVariant === "b" && (
+        <HomeEditorFirst onOpenEditor={openEditor} onOpenCardNews={() => navigate("cardnews-editor")} onSearch={openSearch} onHelp={() => navigate("request-help")} onViewAllTemplates={() => navigate("templates")} />
+      )}
+      {screen === "home" && homeVariant === "current" && (
         <HomeScreen
           // 카드(전체 기능·대표 카테고리·바로 시작하기 캐러셀)를 눌러도 더 이상 아무
           // 화면도 열지 않는다(2026-09-18, "템플릿을 골라 주세요" 목록 화면 제거) —
@@ -5718,7 +5730,8 @@ export default function App() {
       ) : (
         <NotificationsPanel onClose={() => setNotifOpen(false)} onViewAll={() => { setNotifOpen(false); navigate("notifications-all"); }} />
       ))}
-      <HomeOnboarding enabled={screen === "home" && !workspace && !settingsOpen} isDesktop={isDesktop} replayToken={onboardingReplay} />
+      {screen === "home" && !workspace && <HomeVariantSwitcher />}
+      <HomeOnboarding enabled={screen === "home" && homeVariant === "current" && !workspace && !settingsOpen} isDesktop={isDesktop} replayToken={onboardingReplay} />
       {settingsOpen && (
         <SettingsModal
           key={settingsNavKey}
