@@ -19,11 +19,13 @@ export function useDocCommentMembers(me: CommentAuthor): Member[] {
   return useMemo(() => [{ ...me, email: getProfile().email } as Member, ...DEMO_MEMBERS.filter((x) => x.name !== me.name)], [me]);
 }
 
-export function DocCommentLayer({ threads, setThreads, me, members, commentMode, exitCommentMode, openThreadId, setOpenThreadId, pinsHidden }: {
+export function DocCommentLayer({ threads, setThreads, me, members, anchorLabel = "1쪽", commentMode, exitCommentMode, openThreadId, setOpenThreadId, pinsHidden }: {
   threads: DocThread[];
   setThreads: (u: SetStateAction<DocThread[]>) => void;
   me: CommentAuthor;
   members: Member[];
+  /** 위치 표시 — 문서 "1쪽", 시트 "Sheet1" */
+  anchorLabel?: string;
   commentMode: boolean;
   exitCommentMode: () => void;
   openThreadId: string | null;
@@ -137,7 +139,7 @@ export function DocCommentLayer({ threads, setThreads, me, members, commentMode,
         </>
       )}
       {open && (
-        <ThreadPopover x={open.x} y={open.y} bounds={bounds} thread={open} me={me} members={members} anchorLabel="1쪽" draft={open.myDraft ?? ""} actions={actions(open)} />
+        <ThreadPopover x={open.x} y={open.y} bounds={bounds} thread={open} me={me} members={members} anchorLabel={anchorLabel} draft={open.myDraft ?? ""} actions={actions(open)} />
       )}
     </div>
   );

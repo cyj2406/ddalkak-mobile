@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 
 import { showToast } from "@/app/components/common/Toast";
+import { TIERS, isOwnKey, modelLabel, ownModels, useAiModels, validModel, type ModelId } from "@/app/state/aiModels";
 import { color, f } from "@/app/styleTokens";
 
 import { PanelCloseButton } from "./SideDock";
@@ -20,7 +21,8 @@ import { IconTooltip } from "@/app/components/viewer/IconTooltip";
  */
 
 export interface AiAttachment { id: string; name: string; size: number; kind: "image" | "pdf" | "fig" | "selection" | "other"; url?: string }
-export interface AiRequest { prompt: string; attachments: AiAttachment[]; instructions: string; projectFiles: AiAttachment[]; mode: RunMode }
+/** model: 이 요청을 처리할 AI(docs/ai-models.md). 에디터는 creditFor(model, 기준)로 크레딧을 계산한다 */
+export interface AiRequest { prompt: string; attachments: AiAttachment[]; instructions: string; projectFiles: AiAttachment[]; mode: RunMode; model?: ModelId }
 export interface AiResult {
   summary: string; credit: number; stepsDone: number; stopped: boolean; addedCount: number;
   /** 결과 카드 — 누르면 캔버스에서 그 요소를 선택해 보여 준다(Claude 결과 파일 카드처럼) */
@@ -30,6 +32,12 @@ export interface AiResult {
   /** 요청이 모호해 되물은 답 — 작업·크레딧 없음 */
   clarify?: boolean;
 }
+/**
+ * "자세히 적어서 요청하기"(2026-11-19) — 빈칸만 채우면 요청 문장을 만들어 보내는 양식. dev의 "브리프"를 참고했지만
+ * ① 이름이 낯설어 무슨 기능인지 몰랐고 ② 도구와 상관없는 칸(시트에 분위기·로고)이 있었다 → 쉬운 이름 + 도구마다 맞는 칸.
+ */
+export interface BriefField { id: string; label: string; placeholder: string; required?: boolean; multiline?: boolean; chips?: string[] }
+export interface BriefConfig { fields: BriefField[]; submitLabel: string; compose: (v: Record<string, string>) => string }
 export type RunAi = (req: AiRequest, onStep: (label: string) => void, isCancelled: () => boolean) => Promise<AiResult>;
 export type PlanAi = (req: AiRequest) => string[];
 type RunMode = "auto" | "plan";
@@ -52,7 +60,7 @@ const toAttachment = (file: File): AiAttachment => ({
 });
 
 export function AiAssistantPanel({
-  runAi, planAi, context, suggestions, example, commandCount = 634, onAttachSelection, onShowResult, onUndoResult, onFinished, onClose, closeShortcut, prefill,
+  runAi, planAi, context, suggestions, example, commandCount = 634, onAttachSelection, onShowResult, onUndoResult, onFinished, onClose, closeShortcut, prefill, brief, onManageModels,
 }: {
   runAi: RunAi;
   planAi: PlanAi;
@@ -71,6 +79,10 @@ export function AiAssistantPanel({
   closeShortcut?: string;
   /** 입력창에 문장을 넣어 둔다(보내기는 사용자가). key가 바뀔 때마다 다시 넣는다. 예: 템플릿 "AI로 내용 채우기" */
   prefill?: { text: string; key: number };
+  /** 첫 화면의 "자세히 적어서 요청하기" 양식. 없으면 숨긴다 */
+  brief?: BriefConfig;
+  /** 모델 메뉴의 "AI 연결 관리 ›" — 설정 › AI 모델 */
+  onManageModels?: () => void;
 }) {
   const [convs, setConvs] = useState<Conversation[]>([{ id: 1, title: "새 대화", msgs: [], at: Date.now() }]);
   const [cur, setCur] = useState(1);
@@ -82,9 +94,13 @@ export function AiAssistantPanel({
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<AiAttachment[]>([]);
   const [mode, setMode] = useState<RunMode>("auto");
+  // 모델: 새 대화는 설정의 기본 AI로 시작하고, 이 대화에서 바꾼 건 대화가 끝날 때까지 유지(docs/ai-models.md "2-1")
+  const models = useAiModels();
+  const [modelRaw, setModel] = useState<ModelId>(models.defaultModel);
+  const model = validModel(modelRaw, models);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [running, setRunning] = useState(false);
-  const [menu, setMenu] = useState<null | "plus" | "mode" | "history" | "projectPick">(null);
+  const [menu, setMenu] = useState<null | "plus" | "mode" | "model" | "history" | "projectPick">(null);
   const [projectOpen, setProjectOpen] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [projectFiles, setProjectFiles] = useState<(AiAttachment & { at: number })[]>([]);
@@ -147,7 +163,7 @@ export function AiAssistantPanel({
   const send = (text = input) => {
     const t = text.trim();
     if (!t) return;
-    const req: AiRequest = { prompt: t, attachments, instructions, projectFiles, mode };
+    const req: AiRequest = { prompt: t, attachments, instructions, projectFiles, mode, model };
     if (running) {
       if (queue.length >= MAX_QUEUE) { showToast(`대기는 ${MAX_QUEUE}개까지예요. 앞의 요청이 끝나면 다시 보내 주세요.`, "error"); return; }
       setQueue((q) => [...q, { id: ++idRef.current, req }]);
@@ -190,6 +206,7 @@ export function AiAssistantPanel({
     if (msgs.length === 0) return;
     const id = ++idRef.current;
     setConvs((all) => [{ id, title: "새 대화", msgs: [], at: Date.now() }, ...all]);
+    setModel(models.defaultModel);
     setCur(id);
     setMenu(null);
   };
@@ -231,6 +248,7 @@ export function AiAssistantPanel({
           <div>
             <p style={{ fontSize: 12.5, lineHeight: "20px", color: "#4b5563", wordBreak: "keep-all" }}>하고 싶은 작업을 말로 적어 주세요. 예: {example}</p>
             <span className="inline-block mt-1.5 rounded px-1.5 py-0.5" style={{ fontSize: 11, color: "#6b7280", background: "#f3f4f6" }}>사용할 수 있는 명령 {commandCount}개</span>
+            {brief && <BriefCard brief={brief} onSend={(text) => send(text)} />}
             <Suggestions items={suggestions} onPick={(s) => send(s)} />
           </div>
         ) : (
@@ -295,9 +313,12 @@ export function AiAssistantPanel({
             <IconTooltip label="첨부: 파일 · 프로젝트 파일 · 선택 영역" side="top"><button type="button" aria-label="첨부" aria-expanded={menu === "plus"} onClick={() => setMenu(menu === "plus" ? null : "plus")} className="size-8 rounded-full flex items-center justify-center hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]">
               <Plus size={17} color="#334155" />
             </button></IconTooltip>
-            <button type="button" aria-expanded={menu === "mode"} onClick={() => setMenu(menu === "mode" ? null : "mode")} className="flex items-center gap-1 rounded-full px-2 h-7 hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: 12, color: "#334155", fontWeight: 600 }}>
+            <button type="button" aria-expanded={menu === "mode"} onClick={() => setMenu(menu === "mode" ? null : "mode")} className="shrink-0 whitespace-nowrap flex items-center gap-1 rounded-full px-2 h-7 hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: 12, color: "#334155", fontWeight: 600 }}>
               {mode === "auto" ? <Zap size={13} /> : <ListChecks size={13} />}{mode === "auto" ? "자동" : "계획 먼저"}<ChevronDown size={11} color="#94a3b8" />
             </button>
+            <IconTooltip label={`AI 모델: ${modelLabel(model)}`} side="top"><button type="button" aria-label={`AI 모델 ${modelLabel(model)}`} aria-expanded={menu === "model"} onClick={() => setMenu(menu === "model" ? null : "model")} className="flex items-center gap-1 rounded-full px-2 h-7 min-w-0 hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: 12, color: isOwnKey(model) ? "#047857" : "#334155", fontWeight: 600 }}>
+              <Sparkles size={12} className="shrink-0" /><span className="truncate" style={{ maxWidth: 78 }}>{modelLabel(model, true)}</span><ChevronDown size={11} color="#94a3b8" className="shrink-0" />
+            </button></IconTooltip>
             {running && !input.trim() ? (
               <IconTooltip label="작업 중지 (그린 데까지는 남아요)" side="top"><button type="button" aria-label="작업 중지" onClick={() => { cancelRef.current = true; }} className="ml-auto size-8 rounded-full flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[#4f7bff]" style={{ background: color.brand }}>
                 <Square size={12} color="#fff" fill="#fff" />
@@ -309,7 +330,7 @@ export function AiAssistantPanel({
             )}
 
             {menu === "plus" && (
-              <div className="absolute left-0 bottom-10 z-30 bg-white rounded-xl py-1 w-[230px]" style={menuStyle}>
+              <div className="absolute left-0 bottom-10 z-30 bg-white rounded-xl py-1 w-[230px] max-w-full" style={menuStyle}>
                 <button type="button" className={menuItem} onClick={() => { setMenu(null); fileRef.current?.click(); }}>
                   <Upload size={14} color="#475569" /><span style={{ fontSize: 12.5 }}>파일 올리기</span><span className="ml-auto" style={{ fontSize: 10.5, color: "#94a3b8" }}>이미지·PDF·.fig</span>
                 </button>
@@ -325,7 +346,7 @@ export function AiAssistantPanel({
               </div>
             )}
             {menu === "projectPick" && (
-              <div className="absolute left-0 bottom-10 z-30 bg-white rounded-xl py-1 w-[240px] max-h-[240px] overflow-y-auto ui-scroll" style={menuStyle}>
+              <div className="absolute left-0 bottom-10 z-30 bg-white rounded-xl py-1 w-[240px] max-w-full max-h-[240px] overflow-y-auto ui-scroll" style={menuStyle}>
                 <p style={{ fontSize: 11, fontWeight: 600, color: "#64748b", padding: "6px 12px" }}>이번 메시지에 첨부할 프로젝트 파일</p>
                 {projectFiles.map((p) => {
                   const on = attachments.some((a) => a.id === p.id);
@@ -338,12 +359,47 @@ export function AiAssistantPanel({
                 })}
               </div>
             )}
+            {menu === "model" && (
+              <div className="absolute left-0 right-0 bottom-10 z-30 bg-white rounded-xl py-1 max-h-[320px] overflow-y-auto ui-scroll" style={menuStyle} role="menu" aria-label="AI 모델">
+                <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", padding: "6px 12px 2px" }}>딸깍 AI</p>
+                {TIERS.map((t) => {
+                  const id = `ddalkkak:${t.id}`;
+                  return (
+                    <button key={id} type="button" role="menuitemradio" aria-checked={model === id} className={menuItem} onClick={() => { setModel(id); setMenu(null); }}>
+                      <span className="flex-1 min-w-0"><span className="block" style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }}>{t.label} <span style={{ fontWeight: 500, fontSize: 11, color: "#94a3b8" }}>{t.note}</span></span><span className="block" style={{ fontSize: 11, color: "#64748b", wordBreak: "keep-all" }}>{t.desc}</span></span>
+                      {model === id && <Check size={14} color={color.brand} className="shrink-0" />}
+                    </button>
+                  );
+                })}
+                {ownModels(models).length > 0 && (
+                  <>
+                    <div className="h-px my-1" style={{ background: "#f1f5f9" }} />
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", padding: "4px 12px 2px" }}>내 AI · 크레딧 안 씀</p>
+                    {ownModels(models).map((o) => (
+                      <button key={o.id} type="button" role="menuitemradio" aria-checked={model === o.id} className={menuItem} onClick={() => { setModel(o.id); setMenu(null); }}>
+                        <span className="flex-1 min-w-0"><span className="block truncate" style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }}>{o.label}</span><span className="block" style={{ fontSize: 11, color: "#64748b" }}>{o.provider} · 내 키</span></span>
+                        {model === o.id && <Check size={14} color={color.brand} className="shrink-0" />}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {onManageModels && (
+                  <>
+                    <div className="h-px my-1" style={{ background: "#f1f5f9" }} />
+                    <button type="button" className={menuItem} onClick={() => { setMenu(null); onManageModels(); }}>
+                      <span className="flex-1" style={{ fontSize: 12, fontWeight: 600, color: color.brand }}>{ownModels(models).length ? "AI 연결 관리" : "Claude·ChatGPT 연결하기"}</span><ChevronRight size={13} color={color.brand} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            {/* 실행 방식 메뉴는 입력창 폭 안에(예전엔 left-8 + 250px로 패널 오른쪽 밖으로 잘렸다, 2026-11-19) */}
             {menu === "mode" && (
-              <div className="absolute left-8 bottom-10 z-30 bg-white rounded-xl py-1 w-[250px]" style={menuStyle}>
-                {([["auto", Zap, "자동", "바로 캔버스에 그려요"], ["plan", ListChecks, "계획 먼저 보여 주기", "할 일을 먼저 보여 주고, 실행을 눌러야 그려요"]] as const).map(([k, Icon, l, d]) => (
+              <div className="absolute left-0 right-0 bottom-10 z-30 bg-white rounded-xl py-1" style={menuStyle}>
+                {([["auto", Zap, "자동", "보내면 바로 작업해요"], ["plan", ListChecks, "계획 먼저 보여 주기", "할 일을 먼저 보여 주고, 실행을 눌러야 시작해요"]] as const).map(([k, Icon, l, d]) => (
                   <button key={k} type="button" className={menuItem} onClick={() => { setMode(k); setMenu(null); }}>
                     <Icon size={14} color="#475569" className="shrink-0 self-start mt-0.5" />
-                    <span className="flex-1"><span className="block" style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }}>{l}</span><span className="block" style={{ fontSize: 11, color: "#64748b" }}>{d}</span></span>
+                    <span className="flex-1 min-w-0"><span className="block" style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }}>{l}</span><span className="block" style={{ fontSize: 11, color: "#64748b", wordBreak: "keep-all" }}>{d}</span></span>
                     {mode === k && <Check size={14} color={color.brand} />}
                   </button>
                 ))}
@@ -434,6 +490,58 @@ function QueueTray({ items, onRemove, onSendNow, onClear }: {
         </div>
       )}
     </div>
+  );
+}
+
+function BriefCard({ brief, onSend }: { brief: BriefConfig; onSend: (text: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState<Record<string, string>>({});
+  const ready = brief.fields.every((x) => !x.required || (v[x.id] ?? "").trim());
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-4 w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left hover:bg-[#f8fafc] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ border: "1px solid #e5e7eb" }}>
+        <span className="size-8 shrink-0 rounded-lg flex items-center justify-center" style={{ background: color.surface.accent }}><ListChecks size={15} color={color.brand} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block" style={{ fontSize: 12.5, fontWeight: 700, color: "#111827" }}>자세히 적어서 요청하기</span>
+          <span className="block" style={{ fontSize: 11.5, color: "#64748b", wordBreak: "keep-all" }}>무엇을 쓸지 막막하면 빈칸만 채워 보세요</span>
+        </span>
+        <ChevronRight size={14} color="#94a3b8" />
+      </button>
+    );
+  }
+  const field = "w-full rounded-lg outline-none border border-[#e5e7eb] focus:border-[#4f7bff] bg-white";
+  return (
+    <form
+      className="mt-4 rounded-xl p-3" style={{ border: "1px solid #e5e7eb", background: "#fbfcfd" }}
+      onSubmit={(e) => { e.preventDefault(); if (!ready) return; onSend(brief.compose(v)); setOpen(false); setV({}); }}
+      aria-label="자세히 적어서 요청하기"
+    >
+      <div className="flex items-center">
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#111827" }}>자세히 적어서 요청하기</span>
+        <button type="button" aria-label="닫기" onClick={() => setOpen(false)} className="ml-auto size-6 flex items-center justify-center rounded-md hover:bg-black/[0.05]"><X size={13} color="#64748b" /></button>
+      </div>
+      <p style={{ fontSize: 11.5, color: "#64748b", marginTop: 2 }}>적은 내용으로 요청 문장을 만들어 바로 보내요.</p>
+      {brief.fields.map((x) => (
+        <label key={x.id} className="block mt-3">
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: "#334155" }}>{x.label}{x.required && <span style={{ color: "#ef4444" }}> *</span>}</span>
+          {x.chips ? (
+            <span className="flex flex-wrap gap-1.5 mt-1.5">
+              {x.chips.map((c) => {
+                const on = v[x.id] === c;
+                return <button key={c} type="button" aria-pressed={on} onClick={() => setV((o) => ({ ...o, [x.id]: on ? "" : c }))} className="h-7 px-2.5 rounded-full" style={{ fontSize: 11.5, fontWeight: on ? 700 : 500, color: on ? "#fff" : "#475569", background: on ? "#111827" : "#fff", boxShadow: on ? undefined : "inset 0 0 0 1px #e2e8f0" }}>{c}</button>;
+              })}
+            </span>
+          ) : x.multiline ? (
+            <textarea value={v[x.id] ?? ""} onChange={(e) => setV((o) => ({ ...o, [x.id]: e.target.value }))} onKeyDown={(e) => e.stopPropagation()} rows={2} placeholder={x.placeholder} className={`${field} mt-1.5 resize-none`} style={{ ...f, fontSize: 12, lineHeight: "18px", padding: "7px 10px", color: "#111827" }} />
+          ) : (
+            <input value={v[x.id] ?? ""} onChange={(e) => setV((o) => ({ ...o, [x.id]: e.target.value }))} onKeyDown={(e) => e.stopPropagation()} placeholder={x.placeholder} className={`${field} mt-1.5 h-8`} style={{ ...f, fontSize: 12, padding: "0 10px", color: "#111827" }} />
+          )}
+        </label>
+      ))}
+      <button type="submit" disabled={!ready} className="mt-3.5 w-full h-9 rounded-lg flex items-center justify-center gap-1.5 outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[#4f7bff] disabled:opacity-40" style={{ background: color.brand, color: "#fff", fontSize: 12.5, fontWeight: 700 }}>
+        <Sparkles size={14} />{brief.submitLabel}
+      </button>
+    </form>
   );
 }
 
@@ -534,9 +642,12 @@ function AiTurn({ m, isLatest, onRunPlan, onCancelPlan, onShow, onUndo }: { m: A
         </button>
       )}
       {/* 바닥 줄 — 쓴 크레딧(조용히) · 최신 결과에만 ↶ 되돌리기. 평가·복사 버튼은 두지 않는다 */}
-      {(r.credit > 0 || (isLatest && r.createdRootId && !undone)) && (
+      {(r.credit > 0 || m.req.model || (isLatest && r.createdRootId && !undone)) && !r.clarify && (
         <div className="flex items-center gap-2" style={{ fontSize: 11, color: "#94a3b8" }}>
-          {r.credit > 0 && <span>크레딧 {r.credit.toLocaleString()} 사용</span>}
+          {/* 무엇으로 만들었는지 남긴다(docs/ai-models.md "2-4") */}
+          {m.req.model && isOwnKey(m.req.model)
+            ? <span>{modelLabel(m.req.model)} · 내 키, 크레딧 안 씀</span>
+            : <span>{m.req.model ? `${modelLabel(m.req.model, true)} · ` : ""}{r.credit > 0 ? `크레딧 ${r.credit.toLocaleString()} 사용` : "크레딧 안 씀"}</span>}
           {isLatest && r.createdRootId && !undone && (
             <button type="button" onClick={() => { onUndo?.(r); setUndone(true); }} title="이 작업으로 만든 화면을 지워요 (⌘Z로 다시 살릴 수 있어요)" className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 h-6 hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: 11.5, fontWeight: 600, color: "#475569" }}>
               <Undo2 size={12} />되돌리기

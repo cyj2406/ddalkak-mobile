@@ -11,7 +11,7 @@ import { PaperThumb } from "./PaperThumb";
 
 /**
  * 한글·워드 편집기 왼쪽 템플릿 패널(2026-11-19). 기획: docs/doc-editor.md "2-2".
- *   - 폭 300px · 검색 + 용도 칩(형식 칩 없음) · 맨 앞 "빈 문서" · 2열 카드(종이 미리보기 + 제목 한 줄)
+ *   - 폭 300px · 검색 + 용도 칩(형식 칩 없음) · 맨 앞 "빈 문서" · 2열 카드(종이 미리보기 + 제목 한 줄). PPT는 16:9라 1열 큰 미리보기
  *   - 카드를 누르면 바로 바꾸지 않고 미리보기 창(TemplatePreview)을 띄운다.
  *   - 결과가 없으면 딸깍 AI로 이어 준다.
  */
@@ -44,7 +44,7 @@ export function TemplatePanel({ kind, onPreview, onBlank, onAskAi, onClose }: {
           <Search size={14} color="#94a3b8" />
           <input
             value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder={kind === "hangul" ? "공문, 신청서, 기안서…" : "보고서, 회의록, 자기소개서…"}
+            placeholder={{ hangul: "공문, 신청서, 기안서…", word: "보고서, 회의록, 자기소개서…", excel: "견적, 지출, 급여…", ppt: "제안서, 실적 보고, 강의…", pdf: "", video: "숏폼, 브이로그, 리뷰…", image: "할인, 카드뉴스, 썸네일…" }[kind]}
             aria-label="템플릿 검색"
             className="flex-1 min-w-0 bg-transparent outline-none" style={{ fontSize: 12.5, color: "#111827" }}
           />
@@ -80,20 +80,20 @@ export function TemplatePanel({ kind, onPreview, onBlank, onAskAi, onClose }: {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-x-2.5 gap-y-3 pt-1">
+          <div className={`grid ${kind === "ppt" ? "grid-cols-1" : "grid-cols-2"} gap-x-2.5 gap-y-3 pt-1`}>
             {cat === "전체" && !q && (
               <button type="button" onClick={onBlank} className="group text-left outline-none">
-                <span className="flex items-center justify-center rounded-lg transition-colors group-hover:bg-[#f8fafc] group-focus-visible:ring-2 group-focus-visible:ring-[#4f7bff]" style={{ aspectRatio: "1 / 1.414", border: "1.5px dashed #cbd5e1" }}>
+                <span className="flex items-center justify-center rounded-lg transition-colors group-hover:bg-[#f8fafc] group-focus-visible:ring-2 group-focus-visible:ring-[#4f7bff]" style={{ aspectRatio: kind === "ppt" ? "16 / 9" : kind === "video" ? "9 / 16" : kind === "image" ? "1 / 1" : "1 / 1.414", border: "1.5px dashed #cbd5e1" }}>
                   <Plus size={20} color="#94a3b8" />
                 </span>
-                <span className="block truncate mt-1.5" style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }}>빈 문서</span>
+                <span className="block truncate mt-1.5" style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }}>{{ ppt: "빈 프레젠테이션", excel: "빈 시트", video: "빈 프로젝트", image: "빈 캔버스" }[kind as string] ?? "빈 문서"}</span>
                 <span className="block" style={{ fontSize: 11, color: "#94a3b8" }}>템플릿 없이 시작</span>
               </button>
             )}
             {list.map((x) => (
               <button key={x.id} type="button" onClick={() => onPreview(x)} className="group text-left outline-none" aria-label={`${x.title} 미리보기`}>
                 <span className="block rounded-lg overflow-hidden transition-shadow group-hover:shadow-[0_0_0_2px_#4f7bff] group-focus-visible:shadow-[0_0_0_2px_#4f7bff]" style={{ boxShadow: "0 0 0 1px #e2e8f0" }}>
-                  <PaperThumb template={x} scale={1.25} />
+                  <PaperThumb template={x} scale={kind === "ppt" ? 2 : 1.25} />
                 </span>
                 <span className="block truncate mt-1.5" style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }} title={x.title}>{x.title}</span>
                 <span className="block" style={{ fontSize: 11, color: "#94a3b8" }}>{x.category}</span>

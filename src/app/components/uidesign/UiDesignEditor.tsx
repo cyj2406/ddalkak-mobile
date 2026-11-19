@@ -48,13 +48,15 @@ const SUGGESTIONS_EMPTY = ["배달앱 모바일 메인 화면 만들어 줘", "�
 const SUGGESTIONS_SELECTED = ["선택한 화면 다크 모드로 바꿔 줘", "이 화면 옆에 로그인 화면 만들어 줘"];
 const EXAMPLE = "“390×844 모바일 홈 화면 프레임을 만들고 위에 제목, 가운데 카드 3개, 아래 버튼을 넣어 줘”";
 
-export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu }: {
+export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, onManageModels }: {
   onBack: () => void;
   onBellClick?: () => void;
   /** 앱 이름 ▾ 에서 다른 딸깍 도구를 골랐을 때 */
   onSwitchApp?: (appId: string) => void;
   /** 프로필 메뉴: 서비스 상단바와 같은 항목·동작 */
   profileMenu?: ProfileMenuHandlers;
+  /** AI 입력창 모델 메뉴 › AI 연결 관리 */
+  onManageModels?: () => void;
 }) {
   const profile = useProfile();
   const me: CommentAuthor = useMemo(() => ({ name: profile.name, avatarUrl: profile.avatarUrl, collabColor: profile.collabColor }), [profile]);
@@ -199,6 +201,7 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu }
       onFinished={() => { if (dockRef.current !== "ai") setAiDot(true); }}
       onClose={() => setDock(null)}
       closeShortcut={AI_SHORTCUT}
+      onManageModels={onManageModels}
     />
   );
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo, type ReactNode } from "react";
-import { HelpCircle, Settings as SettingsIcon, UserRound, Users, Mail, LogOut, Palette, Bell, Brain, Coins, CreditCard, Monitor, Sun, Moon, FileText, FileVideo, FileSpreadsheet, FileType2, Compass, Image as ImageIcon, X as XIcon, Play, Volume2, Maximize2, Minimize2, BookOpen, Search, Plus, Upload, Check } from "lucide-react";
+import { Sparkles as SparklesIcon, HelpCircle, Settings as SettingsIcon, UserRound, Users, Mail, LogOut, Palette, Bell, Brain, Coins, CreditCard, Monitor, Sun, Moon, FileText, FileVideo, FileSpreadsheet, FileType2, Compass, Image as ImageIcon, X as XIcon, Play, Volume2, Maximize2, Minimize2, BookOpen, Search, Plus, Upload, Check } from "lucide-react";
 
 // ── 공통 에셋 ──────────────────────────────────────────────────────────────────
 import svgPaths from "@/imports/새대화딸깍/svg-yz49hawimu";
@@ -48,6 +48,7 @@ import { findPlan, useSubscription } from "@/app/state/subscription";
 import { PricingPage, type PricingTab } from "@/app/components/pricing/PricingPage";
 import { SubscriptionCompletePage } from "@/app/components/pricing/SubscriptionCompletePage";
 import { SettingsCreditTab } from "@/app/components/settings/SettingsCreditTab";
+import { AiModelsSettings } from "@/app/components/settings/AiModelsSettings";
 import { SettingsBillingTab } from "@/app/components/settings/SettingsBillingTab";
 import { MyPage } from "@/app/components/mypage/MyPage";
 import { ProfileMenuButton } from "@/app/components/account/ProfileMenuButton";
@@ -356,7 +357,7 @@ const memorySummary: MemorySummarySection[] = [
  */
 const FOOTER_MUTED = "#9ca3af";
 
-type SettingsTab = "화면 설정" | "알림" | "메모리" | "크레딧" | "구독 및 결제";
+type SettingsTab = "화면 설정" | "알림" | "AI 모델" | "메모리" | "크레딧" | "구독 및 결제";
 type MemoryFilter = "전체" | "사실" | "요약";
 
 // 설정 콘텐츠의 공통 섹션 헤더(제목 → 설명 → 컨트롤 순서를 모든 탭에서 동일하게 유지).
@@ -445,7 +446,8 @@ function SettingsModal({ initialTab, onClose, onOpenTopUp, onOpenPlanChange }: {
   const [factDraft, setFactDraft] = useState("");
   const [addingFact, setAddingFact] = useState(false);
 
-  const tabs: SettingsTab[] = ["화면 설정", "알림", "메모리", "크레딧", "구독 및 결제"];
+  // AI 모델(2026-11-19): 기본 AI(딸깍 AI 높음·보통·낮음) + 내 Claude·ChatGPT·Gemini 연결. docs/ai-models.md
+  const tabs: SettingsTab[] = ["화면 설정", "알림", "AI 모델", "메모리", "크레딧", "구독 및 결제"];
 
   const memq = memQuery.trim();
   const visibleFacts = memFilter === "요약" ? [] : facts.filter((it) => !memq || it.text.includes(memq));
@@ -483,6 +485,7 @@ function SettingsModal({ initialTab, onClose, onOpenTopUp, onOpenPlanChange }: {
   const tabIcons: Record<SettingsTab, React.ReactNode> = {
     "화면 설정": <Palette size={20} strokeWidth={1.7} />,
     "알림": <Bell size={20} strokeWidth={1.7} />,
+    "AI 모델": <SparklesIcon size={20} strokeWidth={1.7} />,
     "메모리": <Brain size={20} strokeWidth={1.7} />,
     "크레딧": <Coins size={20} strokeWidth={1.7} />,
     "구독 및 결제": <CreditCard size={20} strokeWidth={1.7} />,
@@ -913,6 +916,8 @@ function SettingsModal({ initialTab, onClose, onOpenTopUp, onOpenPlanChange }: {
           )}
 
           {/* ── 크레딧·사용 내역 ── */}
+          {tab === "AI 모델" && <AiModelsSettings />}
+
           {tab === "크레딧" && (
             <SettingsCreditTab onTopUp={() => { onClose(); onOpenTopUp(); }} />
           )}
@@ -5251,19 +5256,13 @@ export default function App() {
   /** 에디터(UI 디자인·한글·워드)는 한 번에 하나. 닫을 때는 둘 다 닫는다 */
   const setUiDesignOpen = (open: boolean) => { setUiDesignOpenRaw(open); setDocEditor(null); };
   const editorOpen = uiDesignOpen || !!docEditor;
-  /** 홈 아이콘 줄 → 포맷 에디터(빈 템플릿 워크스페이스). 레이어 분리만 이미지 미니 에디터를 바로 연다. */
+  /** 홈 아이콘 줄 → 편집기. 레이어 분리는 이미지 미니 에디터, UI 디자인은 UI 디자인 에디터, 나머지(한글·워드·엑셀·PPT·PDF·영상·이미지)는
+   *  공통 셸 편집기(doceditor, 2026-11-19). 예전엔 빈 템플릿 워크스페이스를 열었다. */
   const openEditor = (kind: EditorKind) => {
     if (kind === "layer") { setLayerEditorOpen(true); return; }
-    // 도구모음 편집기와 하나씩 연결하기 전까지 새 항목은 안내만(2026-11-13)
     if (kind === "uidesign") { setUiDesignOpen(true); return; }
-    if (kind === "hangul" || kind === "word") { setUiDesignOpenRaw(false); setDocEditor(kind); return; }
-    if (kind === "pdf") { showToast("PDF 편집기는 준비 중이에요."); return; }
-    const target: Record<Exclude<EditorKind, "layer" | "pdf" | "uidesign">, [WorkspaceCategory, string]> = {
-      image: ["image", "전체"], word: ["docs", "워드"], hangul: ["docs", "한글"],
-      excel: ["docs", "엑셀"], ppt: ["ppt", "전체"], video: ["video", "영상"],
-    };
-    const [category, tabLabel] = target[kind];
-    openWorkspace(category)("빈 템플릿", tabLabel);
+    setUiDesignOpenRaw(false);
+    setDocEditor(kind);
   };
   const openTemplate = (template: TaskTemplate) => {
     const task = getTaskById(template.taskId);
@@ -5376,7 +5375,7 @@ export default function App() {
    *  문의하기·커뮤니티·로그아웃은 실제 주소·로그인 연동 전이라 안내만(2026-11-19). */
   /** 공통 헤더 앱 이름 ▾ — 이 프로젝트에 있는 편집기로 연결, 없는 도구는 안내(에디터는 닫지 않는다) */
   const switchApp = (appId: string) => {
-    const kinds: Record<string, EditorKind> = { word: "word", hangul: "hangul", excel: "excel", ppt: "ppt", image: "image", video: "video", uidesign: "uidesign" };
+    const kinds: Record<string, EditorKind> = { word: "word", hangul: "hangul", excel: "excel", ppt: "ppt", pdf: "pdf", image: "image", video: "video", uidesign: "uidesign" };
     const k = kinds[appId];
     if (!k) { showToast("이 도구는 아직 이 화면에서 열 수 없어요(준비 중)."); return; }
     setUiDesignOpen(false);
@@ -5581,6 +5580,7 @@ export default function App() {
           onBellClick={() => setNotifOpen(true)}
           profileMenu={profileMenu}
           onSwitchApp={switchApp}
+          onManageModels={() => openSettingsAt("AI 모델")}
         />
       )}
       {docEditor && (
@@ -5591,6 +5591,7 @@ export default function App() {
           onBellClick={() => setNotifOpen(true)}
           profileMenu={profileMenu}
           onSwitchApp={switchApp}
+          onManageModels={() => openSettingsAt("AI 모델")}
         />
       )}
       {workspace && (

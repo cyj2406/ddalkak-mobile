@@ -4,6 +4,7 @@ import { AtSign, ChevronDown, ChevronRight, Frame, Hash, HelpCircle, MessageCirc
 import { showToast } from "@/app/components/common/Toast";
 import type { AiAttachment, AiRequest, AiResult } from "@/app/components/editor-shell/AiAssistantPanel";
 import { DEMO_MEMBERS, DEMO_TEAMMATE, type CommentAuthor } from "@/app/components/editor-shell/comments";
+import { creditFor } from "@/app/state/aiModels";
 import { setCreditBalance } from "@/app/state/creditBalance";
 import { getProfile } from "@/app/state/profile";
 import { f } from "@/app/styleTokens";
@@ -293,8 +294,8 @@ export function DesignFile({
         onStep(`색 ${changed}곳 바꾸기`);
         await sleep(300);
         setAiCursor(null);
-        const credit = 20 + changed;
-        setCreditBalance((b) => b - credit);
+        const credit = creditFor(req.model, 20 + changed);
+        if (credit) setCreditBalance((b) => b - credit);
         return {
           summary: `"${startDoc.nodes[sel].name}"을(를) 다크 모드로 바꿨어요. 강조색은 그대로 뒀어요.`, credit, stepsDone: 2, stopped: false, addedCount: 0,
           target: { id: sel, label: startDoc.nodes[sel].name, meta: `색 ${changed}곳 바꿈 · ⌘Z로 되돌리기` },
@@ -331,7 +332,7 @@ export function DesignFile({
       setAiCursor(null);
       setAiBuilding(null);
       if (done > 0) { past.current.push(startDoc); future.current = []; }
-      const credit = done > 0 ? stepCredit(steps.slice(0, done)) : 0;
+      const credit = done > 0 ? creditFor(req.model, stepCredit(steps.slice(0, done))) : 0;
       if (credit) setCreditBalance((b) => b - credit);
       const stopped = done < steps.length;
       return {

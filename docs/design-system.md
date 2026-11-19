@@ -376,7 +376,8 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 - `src/app/components/mypage/*`(마이페이지, 2026-11-13 — 아래 "마이페이지" 절)
 - `src/app/components/uidesign/*`(딸깍 UI 디자인 에디터, 2026-11-13 — 아래 해당 절. 에디터 전용 스타일이라 서비스 기준 아님)
 - `src/app/components/editor-shell/*`(에디터 공통 셸 — 상단 바·오른쪽 도크·공유·AI·코멘트 목록, 2026-11-13)
-- `src/app/components/doceditor/*`(한글·워드 편집기 셸 · 템플릿 패널, 2026-11-19, docs/doc-editor.md. 셸은 서비스 토큰 `color.brand`·`f`·`Button`·`Modal`을 쓴다)
+- AI 모델 선택(2026-11-19, docs/ai-models.md): `src/app/state/aiModels.ts` · 설정 "AI 모델" 탭(`components/settings/AiModelsSettings.tsx`) · `AiAssistantPanel` 입력창 모델 칩. 내 키 표시는 초록(#047857/#ecfdf5) 배지 "내 키".
+- `src/app/components/doceditor/*`(한글·워드·엑셀·PPT·PDF·영상·이미지 편집기 셸 · 템플릿 패널 · 문서 코멘트 레이어, 2026-11-19, docs/doc-editor.md. 셸은 서비스 토큰 `color.brand`·`f`·`Button`·`Modal`을 쓴다)
 - 서비스 전역의 브랜드 블루 색상값(아래 "1) 브랜드 블루" 참고) — 홈/검색/템플릿 화면의
   **레이아웃·문구는 건드리지 않고 색상값만** `#2563eb`→`color.brand`, `#1d4ed8`→`color.brandHover`,
   `#eff5ff`→`color.surface.accent`로 맞췄다. 대상 파일: `HomeSearch.tsx`,
