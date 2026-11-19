@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 export const HOME_VARIANTS = [
   { id: "current", label: "현재", desc: "지금 배포된 홈 (템플릿·작업 중심)" },
   { id: "a", label: "A 런처형", desc: "프롬프트·파일 열기 → 새로 만들기(편집기) → 최근 작업 → 템플릿 한 줄" },
-  { id: "b", label: "B 에디터 우선형", desc: "홈이 곧 3단 작업 화면 — 왼쪽 템플릿, 가운데 새로 만들기, 오른쪽 AI" },
+  { id: "b", label: "B 에디터 우선형", desc: "홈이 곧 3단 작업 화면(왼쪽 템플릿, 가운데 새로 만들기, 오른쪽 AI)" },
 ] as const;
 
 export type HomeVariantId = (typeof HOME_VARIANTS)[number]["id"];

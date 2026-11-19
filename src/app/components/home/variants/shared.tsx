@@ -27,7 +27,7 @@ export function useEngineActions(a: HomeVariantActions) {
   const openFile = (file: File) => {
     const e = engineForFile(file.name);
     if (!e) { showToast("아직 열 수 없는 파일 형식이에요", "error"); return; }
-    showToast(`${file.name} — ${e.label} 편집기로 열어요`);
+    showToast(`${file.name}을(를) ${e.label} 편집기로 열어요`);
     openEngine(e);
   };
   return { openEngine, openPreset, openFile };
