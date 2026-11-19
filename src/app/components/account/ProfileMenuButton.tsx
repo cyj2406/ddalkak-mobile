@@ -106,7 +106,7 @@ export function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutori
               <div className="flex items-center gap-1.5">
                 <p className="truncate" style={{ ...f, fontWeight: 700, fontSize: 15, color: "#0a0a0a", letterSpacing: "-0.4px" }}>{profile.name}</p>
                 {hasCurrentPlan && currentPlan && (
-                  <span className="rounded-full px-2 py-0.5 shrink-0" style={{ ...f, fontWeight: 700, fontSize: 10.5, letterSpacing: "-0.1px", color: color.brand, background: color.surface.accent }}>
+                  <span className="rounded-full px-2 py-0.5 shrink-0" style={{ ...f, fontWeight: 700, fontSize: 11, letterSpacing: "-0.1px", color: color.brand, background: color.surface.accent }}>
                     {currentPlan.name}
                   </span>
                 )}

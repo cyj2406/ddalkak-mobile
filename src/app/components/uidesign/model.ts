@@ -9,7 +9,8 @@ import type { CommentThreadBase } from "@/app/components/editor-shell/comments";
 export const EDITOR_ACCENT = "#14b86e";
 export const EDITOR_ACCENT_SOFT = "#e8f8f0";
 
-export type NodeType = "frame" | "rect" | "ellipse" | "text";
+/** line = 선·화살표(arrow), path = 연필로 그린 자유 선(2026-11-19 툴바 확장) */
+export type NodeType = "frame" | "rect" | "ellipse" | "text" | "line" | "path";
 
 export interface DNode {
   id: string;
@@ -32,6 +33,16 @@ export interface DNode {
   align?: "left" | "center" | "right";
   /** 텍스트 도구로 만든 글자 — 폭이 내용에 맞춰 늘어난다(크기를 직접 바꾸면 false) */
   autoW?: boolean;
+  /** 선: 끝에 화살촉. flipX/flipY = 상자 안에서 선이 어느 대각선으로 가는지(그린 방향) */
+  arrow?: boolean;
+  flipX?: boolean;
+  flipY?: boolean;
+  /** 선·연필 두께 */
+  strokeWidth?: number;
+  /** 연필: 그릴 때의 점들(그릴 때 상자 vw×vh 기준). 크기를 바꾸면 비율대로 늘어난다 */
+  points?: [number, number][];
+  vw?: number;
+  vh?: number;
   /** 이미지 채우기(파일 열기로 넣은 이미지) — 있으면 fill 위에 cover 로 그린다 */
   imageUrl?: string;
 }
@@ -123,6 +134,8 @@ export function makeNode(type: NodeType, parentId: string | null, x: number, y: 
     rect: { name: "Rectangle", fill: "#D9D9D9", radius: 0 },
     ellipse: { name: "Ellipse", fill: "#D9D9D9", radius: 9999 },
     text: { name: "Text", fill: "transparent", radius: 0, text: "텍스트", fontSize: 16, fontWeight: 400, color: "#000000", align: "left" },
+    line: { name: "Line", fill: "transparent", radius: 0, stroke: "#111827", strokeWidth: 2 },
+    path: { name: "Pencil", fill: "transparent", radius: 0, stroke: "#111827", strokeWidth: 2 },
   };
   return { id: uid(), type, parentId, children: [], x, y, w, h, opacity: 1, ...base[type], ...extra } as DNode;
 }

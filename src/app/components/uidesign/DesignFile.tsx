@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { AtSign, ChevronDown, ChevronRight, Frame, Hash, HelpCircle, MessageCircle, MousePointer2, PanelLeft, Plus, Search, Square, Type } from "lucide-react";
+import { ChevronDown, ChevronRight, Circle, Code2, Frame, Hand, Hash, HelpCircle, Image as ImageIcon, Menu, MessageCircle, Minus, MousePointer2, MoveUpRight, PanelLeft, Pencil, PenTool, Plus, Scaling, Search, Slice, Square, SquareDashed, Star, Triangle, Type, Workflow, Zap, type LucideIcon } from "lucide-react";
 
 import { showToast } from "@/app/components/common/Toast";
 import type { AiAttachment, AiRequest, AiResult } from "@/app/components/editor-shell/AiAssistantPanel";
@@ -7,14 +7,15 @@ import { DEMO_MEMBERS, DEMO_TEAMMATE, type CommentAuthor } from "@/app/component
 import { creditFor } from "@/app/state/aiModels";
 import { setCreditBalance } from "@/app/state/creditBalance";
 import { getProfile } from "@/app/state/profile";
-import { f } from "@/app/styleTokens";
+import { f, editorType } from "@/app/styleTokens";
+import { PanelResizeHandle, usePanelWidth } from "@/app/components/editor-shell/PanelResize";
 
 import { Canvas, type Draft, type Tool, type View } from "./Canvas";
 import type { Member, ThreadActions } from "./Comments";
-import { Inspector } from "./Inspector";
+import { Inspector, type InspectorMode } from "./Inspector";
 import { MainMenu, type MenuGroup, type MenuItem } from "./MainMenu";
 import {
-  EDITOR_ACCENT, EDITOR_ACCENT_SOFT, absPos, addNode, darkenTree, deleteNode, generateSteps, isDarkRequest, stepCredit, uid, updateNode,
+  EDITOR_ACCENT, EDITOR_ACCENT_SOFT, absPos, addNode, darkenTree, deleteNode, generateSteps, isDarkRequest, makeNode, stepCredit, uid, updateNode,
   type Doc, type DNode, type Thread,
 } from "./model";
 import { IconTooltip } from "@/app/components/viewer/IconTooltip";
@@ -95,10 +96,16 @@ export function DesignFile({
   const [rail, setRail] = useState<"file" | "assets" | "vars">("file");
   // 왼쪽 패널 보이기(⌘\) — 마지막 상태를 기억한다
   const [leftOpen, setLeftOpenRaw] = useState(() => { try { return localStorage.getItem(LEFT_KEY) !== "0"; } catch { return true; } });
+  // 왼쪽 레이어 패널 너비(2026-11-19: 220 고정 → Figma처럼 기본 240, 오른쪽 끝을 끌어 200~400)
+  const layersPanel = usePanelWidth("uidesign.layers", 240, 200, 400);
   const setLeftOpen = (v: boolean) => { setLeftOpenRaw(v); try { localStorage.setItem(LEFT_KEY, v ? "1" : "0"); } catch { /* 이번 세션만 */ } };
   const [menu, setMenu] = useState<null | "menu" | "search">(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const imageRef = useRef<HTMLInputElement>(null);
+  // 툴바 오른쪽: 모드(디자인·프로토타입·개발) + 레이아웃 그리드, 도형 묶음의 "이미지 넣기"
+  const [mode, setMode] = useState<InspectorMode>("design");
+  const [grid, setGrid] = useState(false);
+  const placeRef = useRef<HTMLInputElement>(null);
   const [aiCursor, setAiCursor] = useState<string | null>(null);
   const [aiBuilding, setAiBuilding] = useState<string | null>(null);
   const canvasWrap = useRef<HTMLDivElement>(null);
@@ -241,6 +248,16 @@ export function DesignFile({
       if (mod && e.key === "0") { e.preventDefault(); zoomBy("100"); return; }
       if (e.shiftKey && e.key === "!") { zoomBy("fit"); return; }
       if (e.shiftKey && e.key.toLowerCase() === "c") { togglePins(); return; }
+      // Figma 단축키: ⇧L 화살표 · ⇧S 섹션 · ⇧P 연필 · ⇧D 개발 모드 · ⇧G 레이아웃 그리드 · ⇧⌘K 이미지 넣기
+      if (e.shiftKey && mod && e.key.toLowerCase() === "k") { e.preventDefault(); placeRef.current?.click(); return; }
+      if (e.shiftKey && !mod) {
+        const k2 = e.key.toLowerCase();
+        if (k2 === "l") { setTool("arrow"); return; }
+        if (k2 === "s") { setTool("section"); return; }
+        if (k2 === "p") { setTool("pencil"); return; }
+        if (k2 === "d") { setMode((m) => (m === "dev" ? "design" : "dev")); return; }
+        if (k2 === "g") { setGrid((v) => !v); return; }
+      }
       if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); setMenu("search"); if (!leftOpen) setLeftOpen(true); return; }
       if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateSelected(); return; }
       if (mod && e.key === "\\") { e.preventDefault(); setLeftOpen(!leftOpen); return; }
@@ -263,7 +280,7 @@ export function DesignFile({
         setSelectedId(null);
         return;
       }
-      const map: Record<string, Tool> = { v: "move", f: "frame", r: "rect", t: "text", c: "comment" };
+      const map: Record<string, Tool> = { v: "move", h: "hand", f: "frame", r: "rect", o: "ellipse", l: "line", t: "text", c: "comment" };
       if (map[k]) setTool(map[k]);
     };
     window.addEventListener("keydown", onKey);
@@ -489,12 +506,14 @@ export function DesignFile({
     <div className="flex-1 min-w-0 min-h-0 flex bg-white" style={{ display: active ? "flex" : "none" }}>
       {/* 왼쪽 패널 — 맨 위 [메인 메뉴] [파일 | 에셋 | 변수] [패널 숨기기]. v2의 별도 레일 단을 합쳤다(가로 단계 줄이기) */}
       {leftOpen && (
-        <aside className="relative w-[220px] shrink-0 flex flex-col min-h-0" style={{ ...f, borderRight: BORDER }} aria-label="파일 패널">
+        <aside className="relative shrink-0 flex flex-col min-h-0" style={{ ...f, width: layersPanel.width, borderRight: BORDER }} aria-label="파일 패널">
+          <PanelResizeHandle side="right" panel={layersPanel} label="레이어 패널 너비 조절" />
           <div className="relative flex items-center gap-1 px-1.5 h-11 shrink-0" style={{ borderBottom: BORDER }}>
             <MenuButton open={menu !== null} onClick={() => setMenu(menu ? null : "menu")} />
             <div className="flex items-center gap-0.5 ml-0.5" role="tablist" aria-label="왼쪽 패널">
-              {([["file", "파일"], ["assets", "에셋"], ["vars", "변수"]] as const).map(([k, l]) => (
-                <button key={k} type="button" role="tab" aria-selected={rail === k} onClick={() => setRail(k)} className="rounded-md px-2 h-7 outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: 11.5, fontWeight: rail === k ? 700 : 500, color: rail === k ? "#111827" : "#6b7280", background: rail === k ? "#f3f4f6" : "transparent" }}>{l}</button>
+              {/* 2026-11-19: "파일" → "레이어"(탭 줄 [▦ 파일 목록]과 이름이 겹쳤다. 이 칸은 페이지·레이어 목록이라 이름이 내용과 맞다) */}
+              {([["file", "레이어"], ["assets", "에셋"], ["vars", "변수"]] as const).map(([k, l]) => (
+                <button key={k} type="button" role="tab" aria-selected={rail === k} onClick={() => setRail(k)} className="rounded-md px-2 h-7 outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: editorType.caption, fontWeight: rail === k ? 700 : 500, color: rail === k ? "#111827" : "#6b7280", background: rail === k ? "#f3f4f6" : "transparent" }}>{l}</button>
               ))}
             </div>
             <IconTooltip label="왼쪽 패널 숨기기 (⌘\)"><button type="button" aria-label="왼쪽 패널 숨기기" onClick={() => setLeftOpen(false)} className="ml-auto size-7 flex items-center justify-center rounded-md hover:bg-black/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]">
@@ -506,7 +525,7 @@ export function DesignFile({
             <>
               <div className="px-2 py-2" style={{ borderBottom: BORDER }}>
                 <div className="flex items-center justify-between px-1 h-7">
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#111827" }}>페이지</span>
+                  <span style={{ fontSize: editorType.caption, fontWeight: 600, color: "#111827" }}>페이지</span>
                   <IconTooltip label="페이지 추가"><button
                     type="button" aria-label="페이지 추가" className="size-6 flex items-center justify-center rounded hover:bg-black/[0.05]"
                     onClick={() => {
@@ -524,7 +543,7 @@ export function DesignFile({
                     key={pg.id} type="button"
                     onClick={() => { setPageId(pg.id); setSelectedId(null); setDraft(null); setOpenThreadId(null); }}
                     className="w-full text-left rounded-md px-2 h-7 truncate"
-                    style={{ fontSize: 11.5, fontWeight: pg.id === page.id ? 600 : 400, color: "#111827", background: pg.id === page.id ? "#f3f4f6" : "transparent" }}
+                    style={{ fontSize: editorType.caption, fontWeight: pg.id === page.id ? 600 : 400, color: "#111827", background: pg.id === page.id ? "#f3f4f6" : "transparent" }}
                   >
                     {pg.name}
                   </button>
@@ -532,11 +551,11 @@ export function DesignFile({
               </div>
               <div className="flex-1 min-h-0 flex flex-col px-2 py-2">
                 <div className="flex items-center justify-between px-1 h-7 shrink-0">
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#111827" }}>레이어</span>
+                  <span style={{ fontSize: editorType.caption, fontWeight: 600, color: "#111827" }}>레이어</span>
                   <Search size={12} color="#6b7280" />
                 </div>
                 {page.rootIds.length === 0 ? (
-                  <p style={{ fontSize: 10.5, color: "#6b7280", padding: "10px 4px", lineHeight: "16px", wordBreak: "keep-all" }}>프레임(F) 또는 도형(R)을 추가해 시작하세요</p>
+                  <p style={{ fontSize: editorType.caption, color: "#6b7280", padding: "10px 4px", lineHeight: "17px", wordBreak: "keep-all" }}>프레임(F) 또는 도형(R)을 추가해 시작하세요</p>
                 ) : (
                   <div className="flex-1 overflow-y-auto ui-scroll" role="tree" aria-label="레이어">
                     {[...page.rootIds].reverse().map((id) => (
@@ -553,18 +572,36 @@ export function DesignFile({
               </div>
             </>
           ) : (
-            <p style={{ fontSize: 11, color: "#6b7280", padding: 14, lineHeight: "17px", wordBreak: "keep-all" }}>
+            <p style={{ fontSize: editorType.caption, color: "#6b7280", padding: 14, lineHeight: "17px", wordBreak: "keep-all" }}>
               {rail === "assets" ? "컴포넌트를 만들면 여기에 모여요. 에셋 라이브러리는 준비 중이에요." : "색·간격 같은 변수를 모아 관리하는 기능은 준비 중이에요."}
             </p>
           )}
         </aside>
       )}
+      <input ref={placeRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} onChange={(e) => {
+        // 이미지 넣기(Figma Place image): 지금 페이지에 이미지 채우기 사각형으로 넣는다(새 파일로 열지 않음)
+        const file = e.target.files?.[0]; e.target.value = "";
+        if (!file) return;
+        const r = new FileReader();
+        r.onload = () => {
+          const url = String(r.result); const img = new Image();
+          img.onload = () => {
+            const sc = Math.min(1, 480 / Math.max(img.naturalWidth, img.naturalHeight));
+            const node = makeNode("rect", null, 40, 40, Math.round(img.naturalWidth * sc), Math.round(img.naturalHeight * sc), { name: file.name.replace(/\.[^.]+$/, ""), fill: "transparent", imageUrl: url });
+            commit(addNode(docRef.current, page.id, node));
+            setSelectedId(node.id);
+            setTool("move");
+          };
+          img.src = url;
+        };
+        r.readAsDataURL(file);
+      }} />
       <input ref={imageRef} type="file" accept="image/*,.svg" className="sr-only" tabIndex={-1} onChange={(e) => { openImageFile(e.target.files?.[0]); e.target.value = ""; }} />
 
       {/* 캔버스 + 하단 툴바 */}
       <div ref={canvasWrap} className="relative flex-1 min-w-0 flex">
         <Canvas
-          doc={doc} page={page} view={view} setView={setView} tool={tool} setTool={setTool}
+          doc={doc} page={page} view={view} setView={setView} tool={tool} setTool={setTool} grid={grid}
           selectedId={selectedId} setSelectedId={setSelectedId} hoverId={hoverId}
           editingTextId={editingTextId} setEditingTextId={setEditingTextId}
           setDocLive={(d) => { docRef.current = d; setDoc(d); }} commitFrom={commitFrom}
@@ -575,7 +612,12 @@ export function DesignFile({
           draftFor={(id) => threads.find((x) => x.id === id)?.myDraft ?? ""} onMoveThread={moveThread}
           pinsHidden={pinsHidden} aiCursorNodeId={aiCursor} aiBuildingId={aiBuilding}
         />
-        <Toolbar tool={tool} setTool={setTool} />
+        <Toolbar
+          tool={tool} setTool={setTool}
+          onPlaceImage={() => placeRef.current?.click()}
+          onActions={() => { setMenu("search"); if (!leftOpen) setLeftOpen(true); }}
+          mode={mode} setMode={setMode} grid={grid} setGrid={setGrid}
+        />
         <HelpButton open={helpOpen} setOpen={setHelpOpen} />
         {!leftOpen && (
           <div className="absolute top-3 left-3 flex items-center gap-0.5 rounded-xl bg-white p-1" style={{ boxShadow: "0px 2px 10px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb", zIndex: 9 }} onPointerDown={(e) => e.stopPropagation()}>
@@ -587,14 +629,14 @@ export function DesignFile({
           </div>
         )}
         {tool === "comment" && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 pointer-events-none" style={{ ...f, background: "#111827", color: "#fff", fontSize: 11.5, fontWeight: 500, whiteSpace: "nowrap" }}>
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 pointer-events-none" style={{ ...f, background: "#111827", color: "#fff", fontSize: editorType.caption, fontWeight: 500, whiteSpace: "nowrap" }}>
             코멘트 모드: 남길 자리를 클릭하세요 · 핀은 끌어서 옮겨요 · Esc로 나가기
           </div>
         )}
       </div>
 
       <Inspector
-        page={page} node={selected} zoom={view.zoom} onZoom={zoomBy} onNode={patchSelected}
+        page={page} node={selected} zoom={view.zoom} onZoom={zoomBy} onNode={patchSelected} mode={mode} onMode={setMode}
         onPageBg={(bg) => commit({ ...docRef.current, pages: docRef.current.pages.map((p) => (p.id === page.id ? { ...p, bg } : p)) })}
       />
     </div>
@@ -634,10 +676,10 @@ function LayerRow({ doc, id, depth, selectedId, collapsed, onToggle, onSelect, o
             autoFocus defaultValue={n.name}
             onBlur={(e) => { onRename(id, e.target.value.trim() || n.name); setEditing(false); }}
             onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditing(false); }}
-            className="flex-1 min-w-0 outline-none rounded px-0.5" style={{ fontSize: 11, boxShadow: `inset 0 0 0 1px ${EDITOR_ACCENT}` }}
+            className="flex-1 min-w-0 outline-none rounded px-0.5" style={{ fontSize: editorType.caption, boxShadow: `inset 0 0 0 1px ${EDITOR_ACCENT}` }}
           />
         ) : (
-          <span className="truncate" style={{ fontSize: 11, color: "#111827", fontWeight: depth === 0 ? 500 : 400 }}>{n.name}</span>
+          <span className="truncate" style={{ fontSize: editorType.caption, color: "#111827", fontWeight: depth === 0 ? 500 : 400 }}>{n.name}</span>
         )}
       </div>
       {open && [...n.children].reverse().map((c) => (
@@ -647,11 +689,11 @@ function LayerRow({ doc, id, depth, selectedId, collapsed, onToggle, onSelect, o
   );
 }
 
-function ToolBtn({ label, shortcut, active, onClick, children, dim }: { label: string; shortcut?: string; active?: boolean; onClick: () => void; children: ReactNode; dim?: boolean }) {
+function ToolBtn({ label, shortcut, active, onClick, children, dim, compact }: { label: string; shortcut?: string; active?: boolean; onClick: () => void; children: ReactNode; dim?: boolean; compact?: boolean }) {
   return (
     <IconTooltip label={shortcut ? `${label} (${shortcut})` : label} side="top"><button
       type="button" aria-label={label} aria-pressed={active} onClick={onClick}
-      className={`size-8 rounded-lg flex items-center justify-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#4f7bff] ${active ? "" : "hover:bg-[#f3f4f6]"}`}
+      className={`${compact ? "size-8" : "size-10"} rounded-lg flex items-center justify-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#4f7bff] ${active ? "" : "hover:bg-[#f3f4f6]"}`}
       style={{ background: active ? EDITOR_ACCENT : undefined, color: active ? "#fff" : dim ? "#9ca3af" : "#111827" }}
     >
       {children}
@@ -660,35 +702,118 @@ function ToolBtn({ label, shortcut, active, onClick, children, dim }: { label: s
 }
 
 /**
- * 하단 툴바 — 지금 되는 도구만(2026-11-19 정리): 이동 · 프레임 · 사각형 · 텍스트 | 코멘트 남기기.
- * 아무것도 열지 않던 ▾, 준비 중인 펜·액션·개발 모드 묶음은 뺐다(Canva·미리캔버스처럼 쓸 수 있는 것만 노출). 펜 등은 메인 메뉴에 "준비 중"으로 남아 있다.
+ * 하단 툴바(2026-11-19 Figma 툴바 기능으로 확장, 모양은 그대로) — docs/ui-design-editor.md "1-7".
+ * 크기(2026-11-19 사용자 "작다"): 도구 버튼 40px·아이콘 20px, 모드 버튼 36px·아이콘 18px, 묶음 메뉴 줄 40px(편집기 상단 버튼과 같은 결).
+ *   [이동▾ 이동·손·크기 조절] [영역▾ 프레임·섹션·슬라이스] [도형▾ 사각형·선·화살표·타원·다각형·별·이미지] [만들기▾ 펜·연필] [텍스트] [코멘트] [⚡ 작업]
+ *   │ [디자인 · 레이아웃 그리드 · 프로토타입 · 개발 모드]
+ * 묶음 버튼은 마지막으로 고른 도구를 보여 주고, ▾로 묶음 안 도구를 고른다. 아직 없는 도구는 흐리게 "준비 중"(누르면 아무것도 바뀌지 않음).
  */
-function Toolbar({ tool, setTool }: { tool: Tool; setTool: (t: Tool) => void }) {
+type ToolItem = { tool?: Tool; label: string; shortcut?: string; icon: LucideIcon; soon?: boolean; run?: () => void };
+function Toolbar({ tool, setTool, onPlaceImage, onActions, mode, setMode, grid, setGrid }: {
+  tool: Tool; setTool: (t: Tool) => void; onPlaceImage: () => void; onActions: () => void;
+  mode: InspectorMode; setMode: (m: InspectorMode) => void; grid: boolean; setGrid: (fn: (v: boolean) => boolean) => void;
+}) {
+  const groups: { id: string; items: ToolItem[] }[] = [
+    { id: "move", items: [{ tool: "move", label: "이동", shortcut: "V", icon: MousePointer2 }, { tool: "hand", label: "손 도구", shortcut: "H", icon: Hand }, { label: "크기 조절", shortcut: "K", icon: Scaling, soon: true }] },
+    { id: "region", items: [{ tool: "frame", label: "프레임", shortcut: "F", icon: Frame }, { tool: "section", label: "섹션", shortcut: "⇧S", icon: SquareDashed }, { label: "슬라이스", shortcut: "S", icon: Slice, soon: true }] },
+    { id: "shape", items: [
+      { tool: "rect", label: "사각형", shortcut: "R", icon: Square }, { tool: "line", label: "선", shortcut: "L", icon: Minus }, { tool: "arrow", label: "화살표", shortcut: "⇧L", icon: MoveUpRight },
+      { tool: "ellipse", label: "타원", shortcut: "O", icon: Circle }, { label: "다각형", icon: Triangle, soon: true }, { label: "별", icon: Star, soon: true },
+      { label: "이미지 넣기", shortcut: "⇧⌘K", icon: ImageIcon, run: onPlaceImage },
+    ] },
+    { id: "create", items: [{ label: "펜", shortcut: "P", icon: PenTool, soon: true }, { tool: "pencil", label: "연필", shortcut: "⇧P", icon: Pencil }] },
+  ];
+  // 묶음마다 마지막으로 고른 도구(단축키로 바꿔도 따라간다)
+  const [last, setLast] = useState<Record<string, Tool>>({ move: "move", region: "frame", shape: "rect", create: "pencil" });
+  useEffect(() => { const g = groups.find((x) => x.items.some((i) => i.tool === tool)); if (g && last[g.id] !== tool) setLast((l) => ({ ...l, [g.id]: tool })); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tool]);
+  const [open, setOpen] = useState<string | null>(null);
+  // 캔버스가 좁으면(양옆 패널 + AI 패널을 다 열었을 때) 32px·16px으로 줄여 툴바가 패널 밑으로 들어가지 않게 한다(2026-11-19)
+  const barRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const host = barRef.current?.parentElement;
+    if (!host) return;
+    const ro = new ResizeObserver(() => setCompact(host.clientWidth < 640));
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
+  const ic = compact ? 16 : 20;
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest("[data-tool-menu]")) setOpen(null); };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+  const modes: { id: InspectorMode | "grid"; label: string; shortcut?: string; icon: LucideIcon }[] = [
+    { id: "design", label: "디자인", icon: Pencil }, { id: "grid", label: "레이아웃 그리드", shortcut: "⇧G", icon: Hash },
+    { id: "prototype", label: "프로토타입", icon: Workflow }, { id: "dev", label: "개발 모드", shortcut: "⇧D", icon: Code2 },
+  ];
   return (
     <div
-      className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-xl bg-white px-1.5 py-1"
+      ref={barRef}
+      className={`absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center rounded-2xl bg-white ${compact ? "gap-0.5 p-1" : "gap-1 p-2"}`}
       style={{ boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }}
       role="toolbar" aria-label="도구" onPointerDown={(e) => e.stopPropagation()}
     >
-      <ToolBtn label="이동" shortcut="V" active={tool === "move"} onClick={() => setTool("move")}><MousePointer2 size={15} /></ToolBtn>
-      <ToolBtn label="프레임" shortcut="F" active={tool === "frame"} onClick={() => setTool("frame")}><Frame size={15} /></ToolBtn>
-      <ToolBtn label="사각형" shortcut="R" active={tool === "rect"} onClick={() => setTool("rect")}><Square size={15} /></ToolBtn>
-      <ToolBtn label="텍스트" shortcut="T" active={tool === "text"} onClick={() => setTool("text")}><Type size={15} /></ToolBtn>
-      <span className="w-px h-5 mx-0.5" style={{ background: "#e5e7eb" }} />
-      <ToolBtn label="코멘트 남기기" shortcut="C" active={tool === "comment"} onClick={() => setTool(tool === "comment" ? "move" : "comment")}><MessageCircle size={15} /></ToolBtn>
+      {groups.map((g) => {
+        const cur = g.items.find((i) => i.tool === last[g.id]) ?? g.items[0];
+        const active = g.items.some((i) => i.tool && i.tool === tool);
+        return (
+          <div key={g.id} className="relative flex items-center" data-tool-menu>
+            <ToolBtn compact={compact} label={cur.label} shortcut={cur.shortcut} active={active} onClick={() => cur.tool && setTool(cur.tool)}><cur.icon size={ic} /></ToolBtn>
+            <IconTooltip label="도구 더 보기" side="top"><button type="button" aria-label={`${cur.label} 묶음 도구 더 보기`} aria-expanded={open === g.id} onClick={() => setOpen(open === g.id ? null : g.id)} className={`w-5 ${compact ? "h-8" : "h-10"} flex items-center justify-center rounded-md hover:bg-[#f3f4f6] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]`}>
+              <ChevronDown size={14} color="#6b7280" />
+            </button></IconTooltip>
+            {open === g.id && (
+              <div className="absolute bottom-14 left-0 z-30 bg-white rounded-xl py-2 min-w-[220px]" style={{ ...f, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }} role="menu" aria-label="도구">
+                {g.items.map((i) => (
+                  <button key={i.label} type="button" role="menuitem" aria-disabled={i.soon || undefined}
+                    onClick={() => { if (i.soon) return; setOpen(null); if (i.run) i.run(); else if (i.tool) setTool(i.tool); }}
+                    className={`w-full flex items-center gap-3 px-3 h-10 text-left outline-none ${i.soon ? "cursor-default" : "hover:bg-[#f3f4f6] focus-visible:bg-[#f3f4f6]"}`}
+                    style={{ color: i.soon ? "#9ca3af" : "#111827" }}
+                  >
+                    <i.icon size={18} />
+                    <span className="flex-1" style={{ fontSize: editorType.body, fontWeight: i.tool === tool ? 700 : 500 }}>{i.label}</span>
+                    {i.soon ? <span className="rounded px-1" style={{ fontSize: editorType.caption, fontWeight: 700, color: "#64748b", background: "#f1f5f9" }}>준비 중</span> : i.shortcut && <span style={{ fontSize: editorType.caption, color: "#9ca3af" }}>{i.shortcut}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <ToolBtn compact={compact} label="텍스트" shortcut="T" active={tool === "text"} onClick={() => setTool("text")}><Type size={ic} /></ToolBtn>
+      <ToolBtn label="코멘트 남기기" shortcut="C" active={tool === "comment"} onClick={() => setTool(tool === "comment" ? "move" : "comment")} compact={compact}><MessageCircle size={ic} /></ToolBtn>
+      <ToolBtn compact={compact} label="작업: 명령·도구 찾기" shortcut="⌘K" onClick={onActions}><Zap size={ic} /></ToolBtn>
+      <span className="w-px h-6 mx-1" style={{ background: "#e5e7eb" }} />
+      <div className="flex items-center gap-0.5 rounded-lg p-0.5" style={{ background: "#f3f4f6" }} role="group" aria-label="모드">
+        {modes.map((m) => {
+          const on = m.id === "grid" ? grid : mode === m.id;
+          return (
+            <IconTooltip key={m.id} label={m.shortcut ? `${m.label} (${m.shortcut})` : m.label} side="top"><button
+              type="button" aria-label={m.label} aria-pressed={on}
+              onClick={() => (m.id === "grid" ? setGrid((v) => !v) : setMode(m.id))}
+              className={`${compact ? "size-7" : "size-9"} rounded-md flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]`}
+              style={{ background: on ? "#fff" : undefined, boxShadow: on ? "0 1px 2px rgba(0,0,0,0.08)" : undefined, color: on ? EDITOR_ACCENT : "#6b7280" }}
+            >
+              <m.icon size={compact ? 14 : 18} />
+            </button></IconTooltip>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-const SHORTCUTS = [["V", "이동"], ["F", "프레임"], ["R", "사각형"], ["T", "텍스트"], ["C", "코멘트"], ["⇧C", "코멘트 숨기기/보이기"], ["Space+드래그", "화면 이동"], ["⌘+휠", "확대·축소"], ["⇧1", "화면에 맞추기"], ["⌘Z", "실행 취소"], ["Delete", "삭제"]] as const;
+const SHORTCUTS = [["V", "이동"], ["H", "손 도구"], ["F", "프레임"], ["⇧S", "섹션"], ["R", "사각형"], ["O", "타원"], ["L", "선"], ["⇧L", "화살표"], ["⇧P", "연필"], ["⇧⌘K", "이미지 넣기"], ["T", "텍스트"], ["C", "코멘트"], ["⌘K", "작업(명령 찾기)"], ["⇧G", "레이아웃 그리드"], ["⇧D", "개발 모드"], ["⇧C", "코멘트 숨기기/보이기"], ["Space+드래그", "화면 이동"], ["⌘+휠", "확대·축소"], ["⇧1", "화면에 맞추기"], ["⌘Z", "실행 취소"], ["Delete", "삭제"]] as const;
 
 function HelpButton({ open, setOpen }: { open: boolean; setOpen: Dispatch<SetStateAction<boolean>> }) {
   return (
-    <div className="absolute bottom-5 right-4" onPointerDown={(e) => e.stopPropagation()} style={f}>
+    <div className="absolute bottom-20 right-4" onPointerDown={(e) => e.stopPropagation()} style={f}>{/* 툴바를 키운 뒤(2026-11-19) 좁은 캔버스에서 툴바 끝과 겹쳐 툴바 줄 위로 올렸다 */}
       {open && (
         <div className="absolute bottom-10 right-0 bg-white rounded-xl p-3" style={{ width: 210, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }}>
-          <p style={{ fontSize: 11.5, fontWeight: 700, color: "#111827", marginBottom: 6 }}>단축키</p>
-          {SHORTCUTS.map(([k, l]) => <div key={k} className="flex justify-between py-0.5" style={{ fontSize: 11 }}><span style={{ color: "#374151" }}>{l}</span><span style={{ color: "#6b7280" }}>{k}</span></div>)}
+          <p style={{ fontSize: editorType.caption, fontWeight: 700, color: "#111827", marginBottom: 6 }}>단축키</p>
+          {SHORTCUTS.map(([k, l]) => <div key={k} className="flex justify-between py-0.5" style={{ fontSize: editorType.caption }}><span style={{ color: "#374151" }}>{l}</span><span style={{ color: "#6b7280" }}>{k}</span></div>)}
         </div>
       )}
       <IconTooltip label="단축키 도움말" side="left"><button type="button" aria-label="단축키 도움말" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="size-7 rounded-full bg-white flex items-center justify-center" style={{ border: "1px solid #e5e7eb", boxShadow: "0px 1px 3px rgba(0,0,0,0.05)" }}>
@@ -698,17 +823,17 @@ function HelpButton({ open, setOpen }: { open: boolean; setOpen: Dispatch<SetSta
   );
 }
 
-/** 메인 메뉴 버튼 — dev 캡처의 로고 자리. 열리면 어두운 메뉴(MainMenu) */
+/** 메인 메뉴 버튼 — 열리면 어두운 메뉴(MainMenu: 파일·편집·보기…). 아이콘은 가장 흔한 ☰(2026-11-19: @ 모양은 메인 메뉴인지 알아보기 어렵다는 피드백) */
 function MenuButton({ open, onClick }: { open: boolean; onClick: () => void }) {
   return (
-    <IconTooltip label="메인 메뉴 (⌘K 액션 검색)"><button
+    <IconTooltip label="메인 메뉴: 파일·편집·보기 (⌘K로 검색)"><button
       type="button" aria-label="메인 메뉴" aria-haspopup="menu" aria-expanded={open} onClick={onClick}
       className="size-8 shrink-0 flex items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]"
       style={{ background: open ? "#f3f4f6" : undefined }}
       onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = "#f3f4f6"; }}
       onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = ""; }}
     >
-      <AtSign size={16} color="#111827" strokeWidth={2.2} />
+      <Menu size={17} color="#111827" strokeWidth={2} />
     </button></IconTooltip>
   );
 }

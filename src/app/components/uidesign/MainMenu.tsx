@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Search } from "lucide-react";
 
-import { f } from "@/app/styleTokens";
+import { f, editorType } from "@/app/styleTokens";
 
 /**
  * 메인 메뉴(2026-11-19) — dev 캡처 기준, Figma 메인 메뉴 참고. 기획: docs/ui-design-editor.md "1-4. 메인 메뉴".
@@ -42,7 +42,7 @@ export function MainMenu({ groups, onClose, focusSearch }: { groups: MenuGroup[]
 
   return (
     <div ref={ref} className="absolute z-50 rounded-xl py-2" style={{ ...f, left: 4, top: 40, width: 248, background: BG, boxShadow: "0px 12px 40px rgba(0,0,0,0.35)" }} role="menu" aria-label="메인 메뉴">
-      <div className="mx-2 mb-1.5 flex items-center gap-2 rounded-lg px-2.5 h-9" style={{ background: "#2a2a2a" }}>
+      <div className="mx-2 mb-2 flex items-center gap-2 rounded-lg px-3 h-10" style={{ background: "#2a2a2a" }}>
         <Search size={14} color={DIM} />
         <input
           ref={inputRef}
@@ -58,27 +58,27 @@ export function MainMenu({ groups, onClose, focusSearch }: { groups: MenuGroup[]
           placeholder="액션…"
           aria-label="액션 검색"
           className="flex-1 min-w-0 bg-transparent outline-none"
-          style={{ fontSize: 12.5, color: TEXT }}
+          style={{ fontSize: editorType.body, color: TEXT }}
         />
-        <span style={{ fontSize: 11, color: DIM }}>⌘K</span>
+        <span style={{ fontSize: editorType.caption, color: DIM }}>⌘K</span>
       </div>
 
       {query ? (
         results.length === 0 ? (
-          <p style={{ fontSize: 12, color: DIM, padding: "10px 14px" }}>“{q}”에 맞는 액션이 없어요.</p>
+          <p style={{ fontSize: editorType.label, color: DIM, padding: "12px 16px" }}>“{q}”에 맞는 액션이 없어요.</p>
         ) : (
           <div className="max-h-[360px] overflow-y-auto ui-scroll">
             {results.map((it, i) => (
               <button
                 key={`${it.group}-${it.label}`} type="button" role="menuitem"
                 onMouseEnter={() => setCursor(i)} onClick={() => exec(it)}
-                className="w-full flex items-center gap-2 px-3.5 h-8 text-left"
+                className="w-full flex items-center gap-2 px-4 h-8 text-left"
                 style={{ background: i === cursor ? HOVER : "transparent", opacity: it.disabled || it.soon ? 0.45 : 1, cursor: it.disabled || it.soon ? "default" : "pointer" }}
               >
-                <span style={{ fontSize: 11, color: DIM }}>{it.group}</span>
+                <span style={{ fontSize: editorType.caption, color: DIM }}>{it.group}</span>
                 <ChevronRight size={11} color={DIM} />
-                <span className="truncate flex-1" style={{ fontSize: 12.5, color: TEXT }}>{it.label}</span>
-                <span style={{ fontSize: 11, color: DIM }}>{it.soon ? "준비 중" : it.shortcut}</span>
+                <span className="truncate flex-1" style={{ fontSize: editorType.body, color: TEXT }}>{it.label}</span>
+                <span style={{ fontSize: editorType.caption, color: DIM }}>{it.soon ? "준비 중" : it.shortcut}</span>
               </button>
             ))}
           </div>
@@ -89,14 +89,14 @@ export function MainMenu({ groups, onClose, focusSearch }: { groups: MenuGroup[]
             <button
               type="button" role="menuitem" aria-haspopup="menu" aria-expanded={hover === i}
               onClick={() => setHover(i)} onFocus={() => setHover(i)}
-              className="w-full flex items-center px-3.5 h-9 text-left outline-none"
-              style={{ background: hover === i ? HOVER : "transparent", fontSize: 13, color: TEXT, fontWeight: 500 }}
+              className="w-full flex items-center px-4 h-10 text-left outline-none"
+              style={{ background: hover === i ? HOVER : "transparent", fontSize: editorType.large, color: TEXT, fontWeight: 500 }}
             >
               <span className="flex-1 pl-5">{g.label}</span>
               <ChevronRight size={13} color={DIM} />
             </button>
             {hover === i && (
-              <div className="absolute top-0 rounded-xl py-1.5" style={{ left: "calc(100% + 4px)", width: 236, background: BG, boxShadow: "0px 12px 40px rgba(0,0,0,0.35)" }} role="menu" aria-label={g.label}>
+              <div className="absolute top-0 rounded-xl py-2" style={{ left: "calc(100% + 4px)", width: 236, background: BG, boxShadow: "0px 12px 40px rgba(0,0,0,0.35)" }} role="menu" aria-label={g.label}>
                 {g.items.map((it) => (
                   <button
                     key={it.label} type="button" role="menuitem" disabled={it.disabled || it.soon}
@@ -105,8 +105,8 @@ export function MainMenu({ groups, onClose, focusSearch }: { groups: MenuGroup[]
                     style={{ opacity: it.disabled || it.soon ? 0.45 : 1 }}
                   >
                     <span className="w-4 shrink-0">{it.checked && <Check size={13} color={TEXT} />}</span>
-                    <span className="truncate flex-1" style={{ fontSize: 12.5, color: TEXT }}>{it.label}</span>
-                    <span style={{ fontSize: 11, color: DIM }}>{it.soon ? "준비 중" : it.shortcut}</span>
+                    <span className="truncate flex-1" style={{ fontSize: editorType.body, color: TEXT }}>{it.label}</span>
+                    <span style={{ fontSize: editorType.caption, color: DIM }}>{it.soon ? "준비 중" : it.shortcut}</span>
                   </button>
                 ))}
               </div>

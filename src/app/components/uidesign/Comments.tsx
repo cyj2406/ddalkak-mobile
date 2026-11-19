@@ -4,7 +4,7 @@ import { ArrowUp, AtSign, Check, Image as ImageIcon, MapPin, MoreHorizontal, Rot
 import { showToast } from "@/app/components/common/Toast";
 import { REACTIONS, relTime, type CommentMsg } from "@/app/components/editor-shell/comments";
 import { ProfileAvatar } from "@/app/components/mypage/ProfileAvatar";
-import { color, f } from "@/app/styleTokens";
+import { color, f, editorType } from "@/app/styleTokens";
 
 import { EDITOR_ACCENT, type CommentAuthor, type Thread } from "./model";
 import { IconTooltip } from "@/app/components/viewer/IconTooltip";
@@ -40,7 +40,7 @@ export function CommentPin({ x, y, author, number, active, resolved, draft, unre
         onMouseLeave={() => { window.clearTimeout(timer.current); setHover(false); }}
         className="absolute flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]"
         style={{
-          left: x, top: y - 32, width: 32, height: 32, padding: 3,
+          left: x, top: y - 32, width: 32, height: 32, padding: 4,
           borderRadius: "16px 16px 16px 2px", background: "#fff",
           boxShadow: active || dragging ? `0 0 0 2px ${EDITOR_ACCENT}, 0 6px 16px rgba(0,0,0,0.22)` : "0 2px 8px rgba(0,0,0,0.18)",
           opacity: resolved ? 0.6 : 1, cursor: dragging ? "grabbing" : draft ? "default" : "pointer", zIndex: active || dragging ? 6 : 5,
@@ -51,10 +51,10 @@ export function CommentPin({ x, y, author, number, active, resolved, draft, unre
         {unread && <span aria-hidden className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full" style={{ background: color.brand, boxShadow: "0 0 0 2px #fff" }} />}
       </button>
       {showPreview && (
-        <div className="absolute pointer-events-none" style={{ ...f, left: x + 38, top: y - 34, width: 220, background: "#fff", borderRadius: 10, padding: "8px 10px", boxShadow: "0px 8px 24px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb", zIndex: 7 }}>
-          <p style={{ fontSize: 11.5, fontWeight: 700, color: "#111827" }}>{author.name} <span style={{ fontWeight: 400, color: "#64748b" }}>· {preview.time}</span></p>
-          <p className="line-clamp-2" style={{ fontSize: 12, lineHeight: "17px", color: "#1f2937", marginTop: 2 }}>{preview.text}</p>
-          {preview.replies > 0 && <p style={{ fontSize: 11, color: "#64748b", marginTop: 3 }}>답글 {preview.replies}개</p>}
+        <div className="absolute pointer-events-none" style={{ ...f, left: x + 38, top: y - 34, width: 220, background: "#fff", borderRadius: 10, padding: "8px 12px", boxShadow: "0px 8px 24px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb", zIndex: 7 }}>
+          <p style={{ fontSize: editorType.caption, fontWeight: 700, color: "#111827" }}>{author.name} <span style={{ fontWeight: 400, color: "#64748b" }}>· {preview.time}</span></p>
+          <p className="line-clamp-2" style={{ fontSize: editorType.label, lineHeight: "20px", color: "#1f2937", marginTop: 2 }}>{preview.text}</p>
+          {preview.replies > 0 && <p style={{ fontSize: editorType.caption, color: "#64748b", marginTop: 4 }}>답글 {preview.replies}개</p>}
         </div>
       )}
     </>
@@ -80,7 +80,7 @@ export function ClusterPin({ x, y, authors, count, unread, onClick }: { x: numbe
           <span key={a.name} className="rounded-full" style={{ marginLeft: i ? -18 : 0, boxShadow: "0 0 0 2px #fff" }}><ProfileAvatar profile={avatarOf(a)} size={size - 8} /></span>
         ))}
       </span>
-      <span className="absolute -bottom-1 -right-1 min-w-5 h-5 px-1 rounded-full flex items-center justify-center" style={{ background: "#111827", color: "#fff", fontSize: 10.5, fontWeight: 700, boxShadow: "0 0 0 2px #fff" }}>{count}</span>
+      <span className="absolute -bottom-1 -right-1 min-w-5 h-5 px-1 rounded-full flex items-center justify-center" style={{ background: "#111827", color: "#fff", fontSize: editorType.meta, fontWeight: 700, boxShadow: "0 0 0 2px #fff" }}>{count}</span>
       {unread && <span aria-hidden className="absolute -top-0.5 right-0 size-2.5 rounded-full" style={{ background: color.brand, boxShadow: "0 0 0 2px #fff" }} />}
     </button>
   );
@@ -97,7 +97,7 @@ const POP_STYLE = {
   ...f, width: 320, background: "#fff", borderRadius: 14, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb", zIndex: 10,
 } as const;
 const MENU_STYLE = { ...f, background: "#1e1e1e", borderRadius: 12, boxShadow: "0px 12px 40px rgba(0,0,0,0.3)" } as const;
-const iconBtn = "size-7 shrink-0 rounded-md flex items-center justify-center outline-none hover:bg-black/[0.06] focus-visible:ring-2 focus-visible:ring-[#4f7bff] disabled:opacity-35";
+const iconBtn = "size-8 shrink-0 rounded-md flex items-center justify-center outline-none hover:bg-black/[0.06] focus-visible:ring-2 focus-visible:ring-[#4f7bff] disabled:opacity-35";
 
 export interface Member extends CommentAuthor { email?: string }
 
@@ -127,13 +127,13 @@ function DarkMenu({ items, onClose, align = "right" }: { items: { label: string;
     return () => document.removeEventListener("pointerdown", down, true);
   }, [onClose]);
   return (
-    <div ref={ref} className="absolute top-8 z-30 py-1.5 w-[180px]" style={{ ...MENU_STYLE, [align]: 0 }} role="menu">
+    <div ref={ref} className="absolute top-8 z-30 py-2 w-[180px]" style={{ ...MENU_STYLE, [align]: 0 }} role="menu">
       {items.map((it) => (
         <button
           key={it.label} type="button" role="menuitem" disabled={it.disabled} title={it.disabled ? it.hint : undefined}
           onClick={() => { onClose(); it.onClick(); }}
           className="w-full text-left px-3 h-8 hover:bg-[#2f2f2f] disabled:opacity-40 disabled:hover:bg-transparent outline-none focus-visible:bg-[#2f2f2f]"
-          style={{ fontSize: 12.5, color: it.danger ? "#fca5a5" : "#f3f4f6" }}
+          style={{ fontSize: editorType.body, color: it.danger ? "#fca5a5" : "#f3f4f6" }}
         >
           {it.label}
         </button>
@@ -197,11 +197,11 @@ function Composer({ placeholder, members, onSubmit, onCancel, autoFocus = true, 
   const canSend = !!text.trim() || images.length > 0;
 
   return (
-    <div className="relative flex items-start gap-2" style={{ padding: 10 }}>
+    <div className="relative flex items-start gap-2" style={{ padding: 12 }}>
       {leading}
       <div className="flex-1 min-w-0 rounded-xl bg-white border border-[#e5e7eb] focus-within:border-[#a5b4fc]">
         {images.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap" style={{ padding: "8px 8px 0" }}>
+          <div className="flex gap-2 flex-wrap" style={{ padding: "8px 8px 0" }}>
             {images.map((src, i) => (
               <span key={i} className="relative">
                 <img src={src} alt="" className="size-12 rounded-md object-cover" style={{ border: "1px solid #e5e7eb" }} />
@@ -227,20 +227,20 @@ function Composer({ placeholder, members, onSubmit, onCancel, autoFocus = true, 
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addImages(e.clipboardData.files); } }}
           placeholder={placeholder}
           className="w-full resize-none bg-transparent block"
-          style={{ ...f, fontSize: 13, lineHeight: "20px", color: "#111827", padding: "8px 10px 4px", outline: "none", maxHeight: 140 }}
+          style={{ ...f, fontSize: editorType.large, lineHeight: "20px", color: "#111827", padding: "8px 12px 4px", outline: "none", maxHeight: 140 }}
         />
         <div className="flex items-center gap-0.5" style={{ padding: "0 4px 4px" }}>
           <IconTooltip label="이모지" side="top"><button type="button" className={iconBtn} aria-label="이모지" onClick={() => setEmojiOpen((v) => !v)}><Smile size={15} color="#64748b" /></button></IconTooltip>
           <IconTooltip label="멘션 추가 (@)" side="top"><button type="button" className={iconBtn} aria-label="멘션 추가" onClick={() => insertAtCaret(text && !/\s$/.test(text) ? " @" : "@")}><AtSign size={15} color="#64748b" /></button></IconTooltip>
           <IconTooltip label="이미지 첨부 (4장, 장당 2MB)" side="top"><button type="button" className={iconBtn} aria-label="이미지 첨부" onClick={() => fileRef.current?.click()}><ImageIcon size={15} color="#64748b" /></button></IconTooltip>
-          <IconTooltip label="보내기 (Enter)" side="top"><button type="button" aria-label="보내기" disabled={!canSend} onClick={submit} className="ml-auto size-7 rounded-full flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ background: canSend ? EDITOR_ACCENT : "#e5e7eb" }}>
+          <IconTooltip label="보내기 (Enter)" side="top"><button type="button" aria-label="보내기" disabled={!canSend} onClick={submit} className="ml-auto size-8 rounded-full flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ background: canSend ? EDITOR_ACCENT : "#e5e7eb" }}>
             <ArrowUp size={14} color="#fff" strokeWidth={2.4} />
           </button></IconTooltip>
         </div>
       </div>
       <input ref={fileRef} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} onChange={(e) => { addImages(e.target.files); e.target.value = ""; }} />
       {emojiOpen && (
-        <div className="absolute bottom-full left-2 mb-1 z-30 grid grid-cols-6 gap-0.5 p-1.5 rounded-xl bg-white" style={{ boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }} onMouseLeave={() => setEmojiOpen(false)}>
+        <div className="absolute bottom-full left-2 mb-1 z-30 grid grid-cols-6 gap-0.5 p-2 rounded-xl bg-white" style={{ boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }} onMouseLeave={() => setEmojiOpen(false)}>
           {EMOJI_INSERT.map((em) => <button key={em} type="button" onClick={() => { insertAtCaret(em); setEmojiOpen(false); }} className="size-8 rounded-md hover:bg-[#f3f4f6]" style={{ fontSize: 16 }}>{em}</button>)}
         </div>
       )}
@@ -250,12 +250,12 @@ function Composer({ placeholder, members, onSubmit, onCancel, autoFocus = true, 
             <button
               key={m.name} type="button" role="option" aria-selected={i === cursor}
               onMouseDown={(e) => { e.preventDefault(); pick(m); }} onMouseEnter={() => setCursor(i)}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-left" style={{ background: i === cursor ? "#f3f4f6" : undefined }}
+              className="w-full flex items-center gap-3 px-3 py-2 text-left" style={{ background: i === cursor ? "#f3f4f6" : undefined }}
             >
               <ProfileAvatar profile={avatarOf(m)} size={28} />
               <span className="min-w-0">
-                <span className="block truncate" style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }}>{m.name}</span>
-                {m.email && <span className="block truncate" style={{ fontSize: 11, color: "#64748b" }}>{m.email}</span>}
+                <span className="block truncate" style={{ fontSize: editorType.body, fontWeight: 600, color: "#111827" }}>{m.name}</span>
+                {m.email && <span className="block truncate" style={{ fontSize: editorType.caption, color: "#64748b" }}>{m.email}</span>}
               </span>
             </button>
           ))}
@@ -288,40 +288,40 @@ function MessageItem({ m, me, members, isFirst, onEdit, onDelete, onReact, onZoo
   const [draft, setDraft] = useState(m.text);
   const reactions = Object.entries(m.reactions ?? {}).filter(([, who]) => who.length);
   return (
-    <div className="group relative flex gap-2.5" style={{ padding: "10px 12px" }}>
+    <div className="group relative flex gap-3" style={{ padding: "12px 12px" }}>
       <ProfileAvatar profile={avatarOf(m.author)} size={26} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-1.5 pr-14">
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: "#111827" }}>{m.author.name}</span>
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>{relTime(m.createdAt)}{m.editedAt ? " · 수정됨" : ""}</span>
+        <div className="flex items-baseline gap-2 pr-14">
+          <span style={{ fontSize: editorType.body, fontWeight: 700, color: "#111827" }}>{m.author.name}</span>
+          <span style={{ fontSize: editorType.caption, color: "#94a3b8" }}>{relTime(m.createdAt)}{m.editedAt ? " · 수정됨" : ""}</span>
         </div>
         {editing ? (
           <div className="mt-1">
             <textarea
               autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} rows={2}
               onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (draft.trim()) { onEdit(draft.trim()); setEditing(false); } } if (e.key === "Escape") { setEditing(false); setDraft(m.text); } }}
-              className="w-full resize-none rounded-lg border border-[#a5b4fc]" style={{ ...f, fontSize: 13, lineHeight: "19px", padding: "6px 8px", outline: "none" }}
+              className="w-full resize-none rounded-lg border border-[#a5b4fc]" style={{ ...f, fontSize: editorType.large, lineHeight: "20px", padding: "8px 8px", outline: "none" }}
             />
             <div className="flex justify-end gap-1 mt-1">
-              <button type="button" onClick={() => { setEditing(false); setDraft(m.text); }} className="rounded-md px-2 h-6" style={{ fontSize: 11.5, color: "#475569" }}>취소</button>
-              <button type="button" disabled={!draft.trim()} onClick={() => { onEdit(draft.trim()); setEditing(false); }} className="rounded-md px-2.5 h-6 disabled:opacity-40" style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", background: EDITOR_ACCENT }}>저장</button>
+              <button type="button" onClick={() => { setEditing(false); setDraft(m.text); }} className="rounded-md px-2 h-6" style={{ fontSize: editorType.caption, color: "#475569" }}>취소</button>
+              <button type="button" disabled={!draft.trim()} onClick={() => { onEdit(draft.trim()); setEditing(false); }} className="rounded-md px-3 h-6 disabled:opacity-40" style={{ fontSize: editorType.caption, fontWeight: 700, color: "#fff", background: EDITOR_ACCENT }}>저장</button>
             </div>
           </div>
         ) : (
-          m.text && <p style={{ fontSize: 13, lineHeight: "19px", color: "#1f2937", whiteSpace: "pre-wrap", wordBreak: "break-word", marginTop: 2 }}><RichText text={m.text} members={members} /></p>
+          m.text && <p style={{ fontSize: editorType.large, lineHeight: "20px", color: "#1f2937", whiteSpace: "pre-wrap", wordBreak: "break-word", marginTop: 2 }}><RichText text={m.text} members={members} /></p>
         )}
         {!!m.images?.length && (
-          <div className="flex gap-1.5 flex-wrap mt-1.5">
+          <div className="flex gap-2 flex-wrap mt-2">
             {m.images.map((src, i) => <button key={i} type="button" onClick={() => onZoomImage(src)} aria-label="이미지 크게 보기"><img src={src} alt="" className="h-16 max-w-[120px] rounded-md object-cover" style={{ border: "1px solid #e5e7eb" }} /></button>)}
           </div>
         )}
         {reactions.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
+          <div className="flex flex-wrap gap-1 mt-2">
             {reactions.map(([em, who]) => {
               const on = who.includes(me.name);
               return (
-                <button key={em} type="button" onClick={() => onReact(em)} title={who.join(", ")} className="inline-flex items-center gap-1 rounded-full px-1.5 h-6" style={{ fontSize: 12, background: on ? color.surface.accent : "#f3f4f6", border: `1px solid ${on ? "#c7d2fe" : "transparent"}`, color: "#334155" }}>
-                  {em}<span style={{ fontSize: 11, fontWeight: 600 }}>{who.length}</span>
+                <button key={em} type="button" onClick={() => onReact(em)} title={who.join(", ")} className="inline-flex items-center gap-1 rounded-full px-2 h-6" style={{ fontSize: editorType.label, background: on ? color.surface.accent : "#f3f4f6", border: `1px solid ${on ? "#c7d2fe" : "transparent"}`, color: "#334155" }}>
+                  {em}<span style={{ fontSize: editorType.caption, fontWeight: 600 }}>{who.length}</span>
                 </button>
               );
             })}
@@ -333,7 +333,7 @@ function MessageItem({ m, me, members, isFirst, onEdit, onDelete, onReact, onZoo
         {mine && <IconTooltip label="수정 · 삭제"><button type="button" className={iconBtn} aria-label="댓글 메뉴" aria-expanded={menu} onClick={() => setMenu((v) => !v)}><MoreHorizontal size={14} color="#64748b" /></button></IconTooltip>}
         {picker && (
           <div className="absolute top-8 right-0 z-30 flex gap-0.5 p-1 rounded-full bg-white" style={{ boxShadow: "0px 8px 24px rgba(0,0,0,0.16)", border: "1px solid #e5e7eb" }} onMouseLeave={() => setPicker(false)}>
-            {REACTIONS.map((em) => <button key={em} type="button" onClick={() => { onReact(em); setPicker(false); }} className="size-7 rounded-full hover:bg-[#f3f4f6]" style={{ fontSize: 15 }} aria-label={`${em} 반응`}>{em}</button>)}
+            {REACTIONS.map((em) => <button key={em} type="button" onClick={() => { onReact(em); setPicker(false); }} className="size-8 rounded-full hover:bg-[#f3f4f6]" style={{ fontSize: 15 }} aria-label={`${em} 반응`}>{em}</button>)}
           </div>
         )}
         {menu && <DarkMenu onClose={() => setMenu(false)} items={[
@@ -379,9 +379,9 @@ export function ThreadPopover({ x, y, bounds, thread, me, members, anchorLabel, 
 
   return (
     <div className="absolute flex flex-col" style={{ ...POP_STYLE, ...pos, maxHeight: 460 }} onPointerDown={(e) => e.stopPropagation()} role="dialog" aria-label={`코멘트 ${thread.number}번`}>
-      <div className="relative flex items-center gap-1" style={{ padding: "10px 8px 6px 14px" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>코멘트 <span style={{ color: "#94a3b8", fontWeight: 600 }}>#{thread.number}</span></span>
-        {thread.resolved && <span style={{ fontSize: 11, fontWeight: 700, color: EDITOR_ACCENT, marginLeft: 4 }}>해결됨</span>}
+      <div className="relative flex items-center gap-1" style={{ padding: "12px 8px 8px 16px" }}>
+        <span style={{ fontSize: editorType.large, fontWeight: 700, color: "#111827" }}>코멘트 <span style={{ color: "#94a3b8", fontWeight: 600 }}>#{thread.number}</span></span>
+        {thread.resolved && <span style={{ fontSize: editorType.caption, fontWeight: 700, color: EDITOR_ACCENT, marginLeft: 4 }}>해결됨</span>}
         <div className="ml-auto flex items-center relative">
           <IconTooltip label="읽지 않음 · 링크 복사 · 삭제"><button type="button" className={iconBtn} aria-label="스레드 메뉴" aria-expanded={menu} onClick={() => setMenu((v) => !v)} style={{ background: menu ? "#eef2ff" : undefined }}><MoreHorizontal size={16} color="#475569" /></button></IconTooltip>
           <IconTooltip label={thread.resolved ? "다시 열기" : "해결로 표시"}><button type="button" className={iconBtn} aria-label={thread.resolved ? "다시 열기" : "해결로 표시"} onClick={() => actions.onResolve(!thread.resolved)}>
@@ -395,7 +395,7 @@ export function ThreadPopover({ x, y, bounds, thread, me, members, anchorLabel, 
           ]} />}
         </div>
       </div>
-      <p className="flex items-center gap-1 truncate" style={{ fontSize: 11, color: "#64748b", padding: "0 14px 8px", borderBottom: "1px solid #f1f5f9" }}>
+      <p className="flex items-center gap-1 truncate" style={{ fontSize: editorType.caption, color: "#64748b", padding: "0 16px 8px", borderBottom: "1px solid #f1f5f9" }}>
         <MapPin size={11} className="shrink-0" />{anchorLabel}
       </p>
       <div ref={listRef} className="overflow-y-auto ui-scroll" style={{ padding: "2px 0" }}>

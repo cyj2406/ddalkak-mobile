@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
-import { f } from "@/app/styleTokens";
+import { f, editorType } from "@/app/styleTokens";
 
 import { MousePointer2 } from "lucide-react";
 
@@ -15,7 +15,8 @@ import {
   type CommentAuthor, type Doc, type DNode, type Page,
 } from "./model";
 
-export type Tool = "move" | "frame" | "rect" | "text" | "comment";
+/** 하단 툴바 도구(2026-11-19 Figma 툴바처럼 확장): 이동 묶음(이동·손) · 영역(프레임·섹션) · 도형(사각형·타원·선·화살표) · 연필 · 텍스트 · 코멘트 */
+export type Tool = "move" | "hand" | "frame" | "section" | "rect" | "ellipse" | "line" | "arrow" | "pencil" | "text" | "comment";
 export interface View { x: number; y: number; zoom: number }
 export interface Draft { frameId: string | null; x: number; y: number }
 
@@ -26,6 +27,8 @@ interface Props {
   setView: (v: View | ((v: View) => View)) => void;
   tool: Tool;
   setTool: (t: Tool) => void;
+  /** 레이아웃 그리드(8px) 보기 — 툴바 오른쪽 # */
+  grid?: boolean;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
   hoverId: string | null;
@@ -169,7 +172,7 @@ export function Canvas(p: Props) {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button === 1 || spaceDown) {
+    if (e.button === 1 || spaceDown || (tool === "hand" && e.button === 0)) {
       e.preventDefault();
       setPanning(true);
       const v0 = view;
@@ -191,7 +194,7 @@ export function Canvas(p: Props) {
     }
 
     p.setOpenThreadId(null);
-    if (tool === "frame" || tool === "rect" || tool === "text") {
+    if (tool !== "move" && tool !== "hand") {
       // 프레임 위에서 그리면 그 프레임(가장 안쪽 프레임)의 자식이 된다
       let parentId: string | null = null;
       for (let id = hit; id; id = doc.nodes[id]?.parentId ?? null) if (doc.nodes[id]?.type === "frame") { parentId = id; break; }
@@ -208,8 +211,48 @@ export function Canvas(p: Props) {
         p.setTool("move");
         return;
       }
-      const count = Object.values(doc.nodes).filter((n) => n.type === tool).length + 1;
-      const node = makeNode(tool, parentId, lx, ly, 1, 1, { name: `${tool === "frame" ? "Frame" : "Rectangle"} ${count}` });
+      const countOf = (pred: (n: DNode) => boolean) => Object.values(doc.nodes).filter(pred).length + 1;
+      if (tool === "pencil") {
+        // 연필: 지나간 점을 모아 자유 선. 끝나면 점들이 들어가는 상자로 맞춘다
+        const pts: [number, number][] = [[0, 0]];
+        const node = makeNode("path", parentId, lx, ly, 1, 1, { name: `Pencil ${countOf((n) => n.type === "path")}`, points: pts, vw: 1, vh: 1 });
+        let last = addNode(base, page.id, node);
+        p.setDocLive(last);
+        const fit = () => {
+          const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+          const mx = Math.min(...xs), my = Math.min(...ys);
+          const bw = Math.max(1, Math.max(...xs) - mx), bh = Math.max(1, Math.max(...ys) - my);
+          return updateNode(last, node.id, { x: lx + mx, y: ly + my, w: bw, h: bh, vw: bw, vh: bh, points: pts.map(([qx, qy]) => [qx - mx, qy - my] as [number, number]) });
+        };
+        drag(e, (dx, dy) => { pts.push([Math.round(dx / view.zoom), Math.round(dy / view.zoom)]); last = fit(); p.setDocLive(last); }, (moved) => {
+          if (!moved) { p.setDocLive(base); return; }
+          p.commitFrom(base, last);
+          p.setSelectedId(node.id);
+        });
+        return; // 연필은 계속 그릴 수 있게 도구를 유지한다(Figma와 같음)
+      }
+      if (tool === "line" || tool === "arrow") {
+        const node = makeNode("line", parentId, lx, ly, 1, 1, { name: `${tool === "arrow" ? "Arrow" : "Line"} ${countOf((n) => n.type === "line")}`, arrow: tool === "arrow" });
+        let last = addNode(base, page.id, node);
+        p.setDocLive(last);
+        p.setSelectedId(node.id);
+        drag(e, (dx, dy) => {
+          const ww = Math.round(Math.abs(dx) / view.zoom), hh = Math.round(Math.abs(dy) / view.zoom);
+          last = updateNode(last, node.id, { x: dx < 0 ? lx - ww : lx, y: dy < 0 ? ly - hh : ly, w: Math.max(1, ww), h: Math.max(1, hh), flipX: dx < 0, flipY: dy < 0 });
+          p.setDocLive(last);
+        }, (moved) => {
+          if (!moved) last = updateNode(last, node.id, { w: 120, h: 1 });
+          p.commitFrom(base, last);
+          p.setTool("move");
+        });
+        return;
+      }
+      // 상자형: 프레임 · 섹션(테두리 있는 큰 프레임) · 사각형 · 타원
+      const type = tool === "section" ? "frame" : tool === "ellipse" ? "ellipse" : tool === "rect" ? "rect" : "frame";
+      const extra: Partial<DNode> = tool === "section"
+        ? { name: `Section ${countOf((n) => n.name.startsWith("Section"))}`, fill: "#EEF2F7", stroke: "#CBD5E1", radius: 8 }
+        : { name: `${{ frame: "Frame", rect: "Rectangle", ellipse: "Ellipse" }[tool as "frame" | "rect" | "ellipse"]} ${countOf((n) => n.type === type)}` };
+      const node = makeNode(type, parentId, lx, ly, 1, 1, extra);
       let last = addNode(base, page.id, node);
       p.setDocLive(last);
       p.setSelectedId(node.id);
@@ -218,7 +261,7 @@ export function Canvas(p: Props) {
         last = updateNode(last, node.id, { x: dx < 0 ? lx - ww : lx, y: dy < 0 ? ly - hh : ly, w: Math.max(1, ww), h: Math.max(1, hh) });
         p.setDocLive(last);
       }, (moved) => {
-        if (!moved) last = updateNode(last, node.id, tool === "frame" ? { w: 390, h: 844 } : { w: 100, h: 100 });
+        if (!moved) last = updateNode(last, node.id, tool === "frame" ? { w: 390, h: 844 } : tool === "section" ? { w: 640, h: 420 } : { w: 100, h: 100 });
         p.commitFrom(base, last);
         p.setTool("move");
       });
@@ -290,7 +333,7 @@ export function Canvas(p: Props) {
   const sel = p.selectedId ? box(p.selectedId) : null;
   const hov = [p.hoverId, hoverCand].find((h) => h && h !== p.selectedId);
   const hovBox = hov ? box(hov) : null;
-  const cursor = panning ? "grabbing" : spaceDown ? "grab" : tool === "comment" ? COMMENT_CURSOR : tool === "move" ? "default" : tool === "text" ? "text" : "crosshair";
+  const cursor = panning ? "grabbing" : spaceDown || tool === "hand" ? "grab" : tool === "comment" ? COMMENT_CURSOR : tool === "move" ? "default" : tool === "text" ? "text" : "crosshair";
 
   const threadPos = (t: { frameId: string | null; x: number; y: number }) => {
     if (t.frameId && doc.nodes[t.frameId]) { const a = absPos(doc, t.frameId); return toScreen(a.x + t.x, a.y + t.y); }
@@ -359,7 +402,11 @@ export function Canvas(p: Props) {
     <div
       ref={ref}
       className="relative flex-1 min-w-0 overflow-hidden select-none"
-      style={{ background: page.bg, cursor }}
+      style={{
+        background: page.bg, cursor,
+        // 레이아웃 그리드(8px) — 확대에 맞춰 칸이 커지고, 화면을 옮기면 같이 움직인다
+        ...(p.grid ? { backgroundImage: "linear-gradient(rgba(239,68,68,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.10) 1px, transparent 1px)", backgroundSize: `${8 * view.zoom}px ${8 * view.zoom}px`, backgroundPosition: `${view.x}px ${view.y}px` } : {}),
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerLeave={() => setHoverCand(null)}
@@ -380,7 +427,7 @@ export function Canvas(p: Props) {
           <div
             key={`label-${id}`}
             className="absolute truncate"
-            style={{ ...f, left: b.x, top: b.y - 18, maxWidth: Math.max(40, b.w), fontSize: 11, color: on ? EDITOR_ACCENT : "#6b7280", fontWeight: 500, cursor: tool === "move" ? "default" : undefined }}
+            style={{ ...f, left: b.x, top: b.y - 18, maxWidth: Math.max(40, b.w), fontSize: editorType.caption, color: on ? EDITOR_ACCENT : "#6b7280", fontWeight: 500, cursor: tool === "move" ? "default" : undefined }}
             onPointerDown={(e) => { if (tool !== "move" || spaceDown) return; e.stopPropagation(); p.setSelectedId(id); startMove(e, id); }}
           >
             {b.n.name}
@@ -405,7 +452,7 @@ export function Canvas(p: Props) {
           ))}
           <div
             className="absolute pointer-events-none"
-            style={{ ...f, left: sel.x + sel.w / 2, top: sel.y + sel.h + 6, transform: "translateX(-50%)", background: EDITOR_ACCENT, color: "#fff", fontSize: 10, fontWeight: 600, padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap" }}
+            style={{ ...f, left: sel.x + sel.w / 2, top: sel.y + sel.h + 6, transform: "translateX(-50%)", background: EDITOR_ACCENT, color: "#fff", fontSize: editorType.caption, fontWeight: 600, padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap" }}
           >
             {Math.round(sel.n.w)} × {Math.round(sel.n.h)}
           </div>
@@ -418,7 +465,7 @@ export function Canvas(p: Props) {
       {aiBox && (
         <div className="absolute pointer-events-none flex items-start" style={{ left: aiBox.x + Math.min(aiBox.w, 160), top: aiBox.y + Math.min(aiBox.h, 40), transition: "left 450ms cubic-bezier(0.4,0,0.2,1), top 450ms cubic-bezier(0.4,0,0.2,1)", zIndex: 8 }} aria-hidden>
           <MousePointer2 size={18} strokeWidth={1.5} fill={color.brand} color="#fff" />
-          <span style={{ ...f, marginTop: 14, marginLeft: -2, padding: "2px 7px", borderRadius: 6, background: color.brand, color: "#fff", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>딸깍 AI</span>
+          <span style={{ ...f, marginTop: 14, marginLeft: -2, padding: "2px 7px", borderRadius: 6, background: color.brand, color: "#fff", fontSize: editorType.caption, fontWeight: 700, whiteSpace: "nowrap" }}>딸깍 AI</span>
         </div>
       )}
       <style>{`@keyframes uiAiPulse{0%,100%{opacity:1}50%{opacity:.35}}.ui-ai-building{animation:uiAiPulse 1.2s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.ui-ai-building{animation:none}}`}</style>
@@ -498,10 +545,35 @@ export function NodeView({ doc, id, editingTextId, onCommitText }: { doc: Doc; i
   const style: CSSProperties = {
     position: "absolute", left: n.x, top: n.y, width: n.type === "text" && n.autoW ? "max-content" : n.w, height: n.type === "text" ? undefined : n.h,
     minHeight: n.type === "text" ? n.h : undefined,
-    background: n.imageUrl ? `${n.fill} url("${n.imageUrl}") center / cover no-repeat` : n.fill, borderRadius: n.radius, opacity: n.opacity,
+    // 타원은 가로세로가 달라도 타원이 되게 50%(고정 radius면 알약 모양이 된다)
+    background: n.imageUrl ? `${n.fill} url("${n.imageUrl}") center / cover no-repeat` : n.fill, borderRadius: n.type === "ellipse" ? "50%" : n.radius, opacity: n.opacity,
     boxShadow: n.stroke ? `inset 0 0 0 1px ${n.stroke}` : undefined,
     overflow: n.type === "frame" ? "hidden" : undefined,
   };
+  if (n.type === "line" || n.type === "path") {
+    // 선·연필은 SVG로 — 상자 크기에 맞춰 늘어난다. 얇아도 잘 잡히게 투명한 굵은 선을 아래에 깐다
+    const sw = n.strokeWidth ?? 2;
+    const [x1, y1, x2, y2] = [n.flipX ? n.w : 0, n.flipY ? n.h : 0, n.flipX ? 0 : n.w, n.flipY ? 0 : n.h];
+    const pts = (n.points ?? []).map(([px, py]) => `${(px / (n.vw || 1)) * n.w},${(py / (n.vh || 1)) * n.h}`).join(" ");
+    return (
+      <div data-node-id={id} data-node-type={n.type} style={{ position: "absolute", left: n.x, top: n.y, width: Math.max(1, n.w), height: Math.max(1, n.h), opacity: n.opacity, overflow: "visible" }}>
+        <svg width="100%" height="100%" style={{ overflow: "visible", display: "block" }} aria-hidden>
+          {n.arrow && <defs><marker id={`ah-${id}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={n.stroke ?? "#111827"} /></marker></defs>}
+          {n.type === "line" ? (
+            <>
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={Math.max(10, sw)} />
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={n.stroke ?? "#111827"} strokeWidth={sw} strokeLinecap="round" markerEnd={n.arrow ? `url(#ah-${id})` : undefined} />
+            </>
+          ) : (
+            <>
+              <polyline points={pts} fill="none" stroke="transparent" strokeWidth={Math.max(10, sw)} />
+              <polyline points={pts} fill="none" stroke={n.stroke ?? "#111827"} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+            </>
+          )}
+        </svg>
+      </div>
+    );
+  }
   if (n.type === "text") {
     Object.assign(style, { ...f, color: n.color, fontSize: n.fontSize, fontWeight: n.fontWeight, textAlign: n.align, lineHeight: 1.4, whiteSpace: n.autoW ? "pre" : "pre-wrap", wordBreak: "keep-all" });
     return (

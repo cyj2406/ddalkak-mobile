@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo, type ReactNode } from "react";
-import { Sparkles as SparklesIcon, HelpCircle, Settings as SettingsIcon, UserRound, Users, Mail, LogOut, Palette, Bell, Brain, Coins, CreditCard, Monitor, Sun, Moon, FileText, FileVideo, FileSpreadsheet, FileType2, Compass, Image as ImageIcon, X as XIcon, Play, Volume2, Maximize2, Minimize2, BookOpen, Search, Plus, Upload, Check } from "lucide-react";
+import { Clapperboard, FilePen, Frame as FrameIcon, MessageSquare, Presentation, type LucideIcon, Sparkles as SparklesIcon, HelpCircle, Settings as SettingsIcon, UserRound, Users, Mail, LogOut, Palette, Bell, Brain, Coins, CreditCard, Monitor, Sun, Moon, FileText, FileVideo, FileSpreadsheet, FileType2, Compass, Image as ImageIcon, X as XIcon, Play, Volume2, Maximize2, Minimize2, BookOpen, Search, Plus, Upload, Check } from "lucide-react";
 
 // ── 공통 에셋 ──────────────────────────────────────────────────────────────────
 import svgPaths from "@/imports/새대화딸깍/svg-yz49hawimu";
@@ -49,6 +49,7 @@ import { PricingPage, type PricingTab } from "@/app/components/pricing/PricingPa
 import { SubscriptionCompletePage } from "@/app/components/pricing/SubscriptionCompletePage";
 import { SettingsCreditTab } from "@/app/components/settings/SettingsCreditTab";
 import { AiModelsSettings } from "@/app/components/settings/AiModelsSettings";
+import { readRecentEditorFiles, type RecentEditorFile } from "@/app/state/recentEditorFiles";
 import { SettingsBillingTab } from "@/app/components/settings/SettingsBillingTab";
 import { MyPage } from "@/app/components/mypage/MyPage";
 import { ProfileMenuButton } from "@/app/components/account/ProfileMenuButton";
@@ -975,7 +976,13 @@ const SIDEBAR_RAIL_W = 76;
  * recentForms 를 넘기면 "최근 서식"이 클릭 가능한 목록으로 바뀌고 currentFormId 가
  * 활성 표시된다. 안 넘기면 기존처럼 recentTemplates 를 정적으로 렌더한다.
  */
-function SidebarDrawer({ open, onClose, currentScreen, onNavigate, onSettingsOpen, onStartTutorial, variant = "drawer", collapsed = false, onToggleCollapsed, recentForms, currentFormId, onSelectForm }: {
+/** 사이드바 "최근 작업" 아이콘(2026-11-19) — 편집기 일러스트 대신 사이드바 다른 아이콘과 같은 선 아이콘(#90A1B9 · 1.66) */
+const RECENT_ICON: Record<string, LucideIcon> = {
+  hangul: FilePen, word: FileText, excel: FileSpreadsheet, ppt: Presentation, pdf: FileType2, uidesign: FrameIcon, image: ImageIcon, video: Clapperboard,
+};
+const recentIcon = (kind: string, color = "#90A1B9") => { const I = RECENT_ICON[kind] ?? FileText; return <I size={19} strokeWidth={1.66} color={color} className="shrink-0" />; };
+
+function SidebarDrawer({ open, onClose, currentScreen, onNavigate, onSettingsOpen, onStartTutorial, variant = "drawer", collapsed = false, onToggleCollapsed, recentForms, currentFormId, onSelectForm, recentFiles = [], onOpenRecentFile }: {
   open: boolean; onClose: () => void;
   currentScreen: Screen; onNavigate: (s: Screen) => void;
   onSettingsOpen: () => void;
@@ -987,6 +994,9 @@ function SidebarDrawer({ open, onClose, currentScreen, onNavigate, onSettingsOpe
   recentForms?: { id: string; title: string }[];
   currentFormId?: string;
   onSelectForm?: (id: string, title: string) => void;
+  /** 최근 작업 — 편집기에서 만든 파일(편집기 아이콘 + 이름). 누르면 그 편집기를 그 파일로 연다(2026-11-19) */
+  recentFiles?: RecentEditorFile[];
+  onOpenRecentFile?: (f: RecentEditorFile) => void;
 }) {
   const nav = (s: Screen) => { onNavigate(s); onClose(); };
   const isHomeVariant = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai"].includes(currentScreen);
@@ -1108,14 +1118,21 @@ function SidebarDrawer({ open, onClose, currentScreen, onNavigate, onSettingsOpe
                   정적 목업 데이터라 "다음 페이지 자동 로드"는 적용 대상이 없다. 아래
                   최종 보고에 그대로 밝힌다). */}
               <div className="px-3" style={{ marginTop: 24 }}>
-                <p style={{ ...f, fontWeight: 500, fontSize: 13, lineHeight: "20px", color: color.text.secondary, letterSpacing: "-0.2px" }}>최근 대화</p>
+                {/* 최근 작업(2026-11-19, dev 사이드바 참고): 편집기 파일은 그 편집기 아이콘을 앞에 붙여 대화와 구분하고, 눌러서 바로 연다. 대화는 아이콘 없이 그대로 */}
+                <p style={{ ...f, fontWeight: 500, fontSize: 13, lineHeight: "20px", color: color.text.secondary, letterSpacing: "-0.2px" }}>{recentFiles.length ? "최근 작업" : "최근 대화"}</p>
               </div>
               <div className="px-2 pb-2" style={{ marginTop: 8 }}>
+                {recentFiles.map((rf) => (
+                  <button key={`${rf.kind}:${rf.id}`} type="button" title={`${rf.app} · ${rf.name}`} onClick={() => { onOpenRecentFile?.(rf); onClose(); }}
+                    className="dk-nav-item dk-nav-item--sub w-full h-10 rounded-[14px] flex items-center gap-3 px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]">
+                    <span className="shrink-0 flex items-center justify-center" style={{ width: 20, height: 20 }}>{recentIcon(rf.kind)}</span>
+                    <span className="dk-nav-item__label truncate" style={{ ...f, fontWeight: 400, fontSize: 14, lineHeight: "20px", letterSpacing: "-0.2px" }}>{rf.name}</span>
+                  </button>
+                ))}
                 {recentChats.map((c) => (
                   <div key={c} title={c} className="h-10 rounded-[14px] flex items-center gap-3 px-3">
-                    {/* 아이콘 없는 행이라도 아이콘 폭(20px)만큼 spacer를 둬서, 텍스트
-                        시작점이 위 서식 목록(아이콘+간격 뒤)과 같은 x좌표에 오게 한다. */}
-                    <div className="shrink-0" style={{ width: 20 }} aria-hidden />
+                    {/* 대화도 말풍선 선 아이콘(2026-11-19) — 아이콘 자리만 비워 두면 휑해 보였다. 편집기 파일은 편집기 아이콘, 대화는 말풍선으로 구분 */}
+                    <span className="shrink-0 flex items-center justify-center" style={{ width: 20, height: 20 }} aria-hidden><MessageSquare size={18} strokeWidth={1.66} color="#90A1B9" /></span>
                     <span className="truncate" style={{ ...f, fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#45556c", letterSpacing: "-0.2px" }}>{c}</span>
                   </div>
                 ))}
@@ -5253,6 +5270,9 @@ export default function App() {
   const [uiDesignOpen, setUiDesignOpenRaw] = useState(false);
   // 한글·워드 편집기(2026-11-19) — UI 디자인 에디터와 같은 집중 모드. docs/doc-editor.md
   const [docEditor, setDocEditor] = useState<DocKind | null>(null);
+  // 사이드바 "최근 작업"에서 연 파일 — 편집기를 그 파일로 연다(없으면 새 빈 파일)
+  const [docInitialId, setDocInitialId] = useState<string | undefined>();
+  const [uiInitialId, setUiInitialId] = useState<string | undefined>();
   /** 에디터(UI 디자인·한글·워드)는 한 번에 하나. 닫을 때는 둘 다 닫는다 */
   const setUiDesignOpen = (open: boolean) => { setUiDesignOpenRaw(open); setDocEditor(null); };
   const editorOpen = uiDesignOpen || !!docEditor;
@@ -5260,6 +5280,7 @@ export default function App() {
    *  공통 셸 편집기(doceditor, 2026-11-19). 예전엔 빈 템플릿 워크스페이스를 열었다. */
   const openEditor = (kind: EditorKind) => {
     if (kind === "layer") { setLayerEditorOpen(true); return; }
+    setDocInitialId(undefined); setUiInitialId(undefined);
     if (kind === "uidesign") { setUiDesignOpen(true); return; }
     setUiDesignOpenRaw(false);
     setDocEditor(kind);
@@ -5373,6 +5394,15 @@ export default function App() {
 
   /** 프로필 메뉴 동작: 서비스 상단바와 에디터 공통 헤더가 같이 쓴다. 다른 화면으로 가는 항목은 에디터를 닫고 간다.
    *  문의하기·커뮤니티·로그아웃은 실제 주소·로그인 연동 전이라 안내만(2026-11-19). */
+  // 편집기를 닫거나 화면을 옮길 때마다 다시 읽는다(편집기가 이 브라우저에 저장한 목록)
+  const recentFiles = useMemo(() => readRecentEditorFiles(), [docEditor, uiDesignOpen, screen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openRecentFile = (rf: RecentEditorFile) => {
+    if (rf.kind === "uidesign") { setUiInitialId(rf.id); setUiDesignOpen(true); return; }
+    setDocInitialId(rf.id);
+    setUiDesignOpenRaw(false);
+    setDocEditor(rf.kind as DocKind);
+  };
+
   /** 공통 헤더 앱 이름 ▾ — 이 프로젝트에 있는 편집기로 연결, 없는 도구는 안내(에디터는 닫지 않는다) */
   const switchApp = (appId: string) => {
     const kinds: Record<string, EditorKind> = { word: "word", hangul: "hangul", excel: "excel", ppt: "ppt", pdf: "pdf", image: "image", video: "video", uidesign: "uidesign" };
@@ -5398,14 +5428,18 @@ export default function App() {
        오버레이 드로어라 자리를 차지하지 않고, 본문 컬럼 혼자 폭을 전부 쓴다. */
     <div className="bg-[#f8fafc] h-[100dvh] w-full flex overflow-hidden" style={f}>
       <ToastHost />
-      {/* UI 디자인 에디터는 집중 모드 — 서비스 사이드바를 숨긴다(나가기는 에디터 상단 ‹). docs/ui-design-editor.md "1-3" */}
-      {!editorOpen && <SidebarDrawer
+      {/* 편집기 안에서도 데스크톱은 서비스 사이드바를 아이콘 레일로 접어 붙여 둔다(2026-11-19, dev 화면과 같게) —
+          홈·내 작업·즐겨찾기로 바로 간다. 편집기에 들어가면 inWorkspace 효과가 레일로 접는다. 좁은 화면은 예전처럼 숨김 */}
+      {(!editorOpen || isDesktop) && <SidebarDrawer
+        recentFiles={recentFiles}
+        onOpenRecentFile={openRecentFile}
         variant={isDesktop ? "docked" : "drawer"}
         open={isDesktop || drawerOpen}
         onClose={() => setDrawerOpen(false)}
         collapsed={sidebarCollapsed}
         onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
-        currentScreen={screen}
+        // 편집기 안에서는 홈 등 어느 메뉴도 "지금 화면"으로 표시하지 않는다
+        currentScreen={editorOpen ? ("editor" as Screen) : screen}
         onNavigate={navigate}
         onSettingsOpen={() => openSettingsAt("화면 설정")}
         onStartTutorial={startTutorial}
@@ -5549,7 +5583,7 @@ export default function App() {
           결제 실패 알림·"구독 및 결제 관리"는 구독·결제 탭, "다시 구독하기"/"크레딧
           충전"은 구매 화면으로 바로 연다), pricingNavKey를 key로 넘겨 이미 이 화면에
           머무는 중에 다시 openPricing()을 불러도 매번 그 탭/화면으로 확실히 연다. */}
-      {screen === "mypage" && <MyPage />}
+      {screen === "mypage" && <MyPage onOpenPricing={() => openPricing("subscription")} onOpenSettings={(t) => openSettingsAt(t)} />}
       {screen === "pricing" && (
         <PricingPage
           key={pricingNavKey}
@@ -5576,6 +5610,8 @@ export default function App() {
           TopBar 까지 덮는 것은 지금과 같다. */}
       {uiDesignOpen && (
         <UiDesignEditor
+          key={uiInitialId ?? "home"}
+          initialFileId={uiInitialId}
           onBack={() => setUiDesignOpen(false)}
           onBellClick={() => setNotifOpen(true)}
           profileMenu={profileMenu}
@@ -5585,8 +5621,9 @@ export default function App() {
       )}
       {docEditor && (
         <DocEditor
-          key={docEditor}
+          key={`${docEditor}:${docInitialId ?? "new"}`}
           kind={docEditor}
+          initialDocId={docInitialId}
           onBack={() => setDocEditor(null)}
           onBellClick={() => setNotifOpen(true)}
           profileMenu={profileMenu}
@@ -5641,6 +5678,8 @@ export default function App() {
           onBack={() => setScreen("forms-ai")}
           sidebar={
             <SidebarDrawer
+        recentFiles={recentFiles}
+        onOpenRecentFile={openRecentFile}
               variant="docked"
               open
               onClose={() => {}}
