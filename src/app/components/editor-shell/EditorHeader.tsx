@@ -4,7 +4,7 @@ import { Check, ChevronDown, ChevronLeft, Cloud, Download, Loader2, Play, Plus }
 import { ProfileMenuButton } from "@/app/components/account/ProfileMenuButton";
 import { color, f } from "@/app/styleTokens";
 
-import { DDALKKAK_APPS } from "./apps";
+import { EDITOR_APPS } from "./apps";
 import type { CommentAuthor } from "./comments";
 import { SharePopover } from "./SharePopover";
 import { IconTooltip } from "@/app/components/viewer/IconTooltip";
@@ -41,7 +41,7 @@ const savedLabel = (at: number) => {
 export type ProfileMenuHandlers = Parameters<typeof ProfileMenuButton>[0];
 
 export function EditorHeader({
-  appIcon, appName, currentAppId, onSwitchApp, onNewFile, fileName, onRenameFile, location, saveState,
+  appIcon, appName, currentAppId, onSwitchApp, fileName, onRenameFile, location, saveState,
   capabilities = { share: true, present: true }, presentLabel = "프레젠테이션", onPresent, onExport,
   toolSlot, actions, viewers, onBack, onBell, accent = color.brand, profileMenu,
 }: {
@@ -50,8 +50,6 @@ export function EditorHeader({
   /** 앱 전환 메뉴에서 지금 도구 표시 */
   currentAppId?: string;
   onSwitchApp?: (id: string) => void;
-  /** 앱 이름 ▾ 메뉴의 "새 파일" */
-  onNewFile?: () => void;
   /** 없으면(홈 탭) 앱 이름만 보이고 결과물 버튼을 숨긴다 */
   fileName?: string;
   onRenameFile?: (name: string) => void;
@@ -96,7 +94,7 @@ export function EditorHeader({
           <span style={{ fontSize: 13, fontWeight: fileName ? 600 : 700, color: fileName ? "#475569" : "#111827" }}>{appName}</span>
           <ChevronDown size={13} color="#94a3b8" />
         </button>
-        {appMenu && <AppSwitcher current={currentAppId} onClose={() => setAppMenu(false)} onSwitch={onSwitchApp} onNewFile={onNewFile} />}
+        {appMenu && <AppSwitcher current={currentAppId} onClose={() => setAppMenu(false)} onSwitch={onSwitchApp} />}
       </div>
       {fileName && (
         <span className="flex items-center gap-1.5 min-w-0">
@@ -177,8 +175,12 @@ function SaveBadge({ state, location }: { state?: SaveState; location?: string }
   );
 }
 
-/** 앱 이름 ▾ — 다른 딸깍 도구로 바로 이동(서비스 사이드바 대신) + 새 파일 */
-function AppSwitcher({ current, onClose, onSwitch, onNewFile }: { current?: string; onClose: () => void; onSwitch?: (id: string) => void; onNewFile?: () => void }) {
+/**
+ * 앱 이름 ▾ — 다른 딸깍 편집기로 바로 이동하는 **아이콘 격자**(2026-11-19, Google Workspace·Microsoft 365 앱 런처처럼).
+ * 홈 "편집기 바로 열기"와 같은 8개·같은 그림·같은 이름(editor-shell/apps.ts). 아직 못 여는 도구는 흐리게 "준비 중".
+ * 예전엔 17개 글자 목록 + 맨 위 "새 파일"이었다 — 새 파일은 탭 줄 ＋가 맡는다.
+ */
+function AppSwitcher({ current, onClose, onSwitch }: { current?: string; onClose: () => void; onSwitch?: (id: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const down = (e: PointerEvent) => { if (!ref.current?.parentElement?.contains(e.target as Node)) onClose(); };
@@ -187,32 +189,27 @@ function AppSwitcher({ current, onClose, onSwitch, onNewFile }: { current?: stri
     document.addEventListener("keydown", key);
     return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", key); };
   }, [onClose]);
-  const item = "w-full flex items-center gap-2 px-3 py-1.5 text-left rounded-lg hover:bg-[#f3f4f6] outline-none focus-visible:bg-[#f3f4f6]";
   return (
-    <div ref={ref} className="absolute left-0 top-10 z-50 bg-white rounded-xl p-1.5 w-[280px] max-h-[70vh] overflow-y-auto ui-scroll" style={{ ...f, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }} role="menu" aria-label="딸깍 도구">
-      {onNewFile && (
-        <>
-          <button type="button" role="menuitem" className={item} onClick={() => { onClose(); onNewFile(); }}>
-            <span className="size-6 rounded-md flex items-center justify-center" style={{ background: "#f1f5f9" }}><Plus size={13} color="#334155" /></span>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: "#111827" }}>새 파일</span>
-          </button>
-          <div className="h-px my-1" style={{ background: "#f1f5f9" }} />
-        </>
-      )}
-      {DDALKKAK_APPS.map((g) => (
-        <div key={g.label} className="py-0.5">
-          <p style={{ fontSize: 10.5, fontWeight: 700, color: "#94a3b8", padding: "6px 12px 2px" }}>{g.label}</p>
-          {g.apps.map((a) => (
-            <button key={a.id} type="button" role="menuitem" aria-current={a.id === current ? "true" : undefined} className={item} onClick={() => { onClose(); if (a.id !== current) onSwitch?.(a.id); }}>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate" style={{ fontSize: 12.5, fontWeight: a.id === current ? 700 : 500, color: "#111827" }}>{a.name}</span>
-                <span className="block truncate" style={{ fontSize: 11, color: "#94a3b8" }}>{a.desc}</span>
-              </span>
-              {a.id === current && <Check size={14} color={color.brand} />}
+    <div ref={ref} className="absolute left-0 top-10 z-50 bg-white rounded-2xl p-3" style={{ ...f, width: 336, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }} role="menu" aria-label="딸깍 편집기">
+      <p style={{ fontSize: 11.5, fontWeight: 700, color: "#94a3b8", padding: "0 4px 8px" }}>딸깍 편집기</p>
+      <div className="grid grid-cols-4 gap-1">
+        {EDITOR_APPS.map((a) => {
+          const on = a.id === current;
+          return (
+            <button
+              key={a.id} type="button" role="menuitem" aria-current={on ? "true" : undefined} aria-disabled={a.soon || undefined}
+              title={a.soon ? `${a.label}: 준비 중` : a.hint}
+              onClick={() => { if (a.soon) return; onClose(); if (!on) onSwitch?.(a.id); }}
+              className={`relative flex flex-col items-center gap-1 rounded-xl pt-2.5 pb-2 outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff] ${a.soon ? "cursor-default" : "hover:bg-[#f3f4f6]"}`}
+              style={{ background: on ? color.surface.accent : undefined }}
+            >
+              <img src={a.art} alt="" className="size-10 object-contain" style={{ opacity: a.soon ? 0.4 : 1 }} draggable={false} />
+              <span style={{ fontSize: 12, fontWeight: on ? 700 : 500, color: on ? color.brand : a.soon ? "#94a3b8" : "#1e293b" }}>{a.label}</span>
+              {a.soon && <span className="absolute top-1 right-1 rounded px-1" style={{ fontSize: 9, fontWeight: 700, color: "#64748b", background: "#f1f5f9" }}>준비 중</span>}
             </button>
-          ))}
-        </div>
-      ))}
+          );
+        })}
+      </div>
     </div>
   );
 }

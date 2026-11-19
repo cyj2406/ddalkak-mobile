@@ -235,7 +235,6 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu }
         appName="딸깍 UI 디자인"
         currentAppId="uidesign"
         onSwitchApp={onSwitchApp}
-        onNewFile={() => openFile(nextUntitled())}
         fileName={activeFile?.name}
         onRenameFile={(name) => activeFile && setFiles((l) => l.map((x) => (x.id === activeFile.id ? { ...x, name } : x)))}
         location="임시 보관함"

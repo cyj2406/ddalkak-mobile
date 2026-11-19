@@ -2,34 +2,15 @@ import { useId, type ReactNode } from "react";
 import { color, editorEntry, f, motion, radius, typography } from "@/app/styleTokens";
 import { Badge } from "@/app/components/common/Badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/app/components/ui/tooltip";
-import artImage from "@/assets/home/editor/image.png";
-import artWord from "@/assets/home/editor/word.png";
-import artHangul from "@/assets/home/editor/hangul.png";
-import artPpt from "@/assets/home/editor/ppt.png";
-import artExcel from "@/assets/home/editor/excel.png";
-import artPdf from "@/assets/home/editor/pdf.png";
-import artUiDesign from "@/assets/home/editor/ui-design.png";
-import artVideo from "@/assets/home/editor/video-edit.png";
+import { EDITOR_APPS } from "@/app/components/editor-shell/apps";
 
 /** 홈 아이콘 줄이 여는 에디터 — App이 워크스페이스 카테고리·결과 형식으로 바꿔 연다. */
 // "layer"는 홈 줄에서 빠졌지만(2026-11-13) App.openEditor가 레이어 분리 미니 에디터로 여는 길은 남아 있다.
 export type EditorKind = "image" | "word" | "hangul" | "ppt" | "excel" | "pdf" | "uidesign" | "video" | "layer";
 
-/**
- * 순서 = 화면 순서 = 도구모음 순서(2026-11-13): 문서 편집 → 이미지·디자인 → 영상.
- * 각 항목은 도구모음 카드 하나에 대응한다(주석의 도구 이름). hint = 도구모음 카드 설명을 그대로 툴팁에.
- * 아이콘 그림도 도구모음 카드와 같은 그림이다(PDF·UI 디자인·영상은 home/art 원본을 192px로 다시 맞춘 파일).
- */
-const EDITORS: { kind: Exclude<EditorKind, "layer">; label: string; hint: string; art: string }[] = [
-  { kind: "hangul", label: "한글", hint: "HWP·HWPX 문서 편집", art: artHangul }, // 한글 편집기
-  { kind: "word", label: "워드", hint: "DOCX 문서 편집", art: artWord }, // 딸깍 문서
-  { kind: "excel", label: "엑셀", hint: "XLSX 스프레드시트 편집", art: artExcel }, // 딸깍 시트
-  { kind: "ppt", label: "PPT", hint: "PPTX 프레젠테이션 편집", art: artPpt }, // 딸깍 슬라이드
-  { kind: "pdf", label: "PDF", hint: "PDF 수정·저장", art: artPdf }, // 딸깍 PDF
-  { kind: "uidesign", label: "UI 디자인", hint: "피그마 파일·화면 디자인", art: artUiDesign }, // 딸깍 UI 디자인
-  { kind: "image", label: "이미지", hint: "레이어 사진 편집", art: artImage }, // 딸깍 포토(레이어 분리 포함)
-  { kind: "video", label: "영상", hint: "간단한 영상 편집", art: artVideo }, // 딸깍 영상편집
-];
+/** 목록·그림·이름은 editor-shell/apps.ts 한 곳(공통 헤더 앱 전환 격자와 같은 목록, 2026-11-19). */
+const EDITORS: { kind: Exclude<EditorKind, "layer">; label: string; hint: string; art: string }[] =
+  EDITOR_APPS.map((a) => ({ kind: a.id, label: a.label, hint: a.hint, art: a.art }));
 
 /**
  * 항목 하나 — 클릭 영역(item × 전체 높이)이 hover 배경 영역과 같고, 모든 항목이 같은 크기다.

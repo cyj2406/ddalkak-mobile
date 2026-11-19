@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LayoutGrid, Plus, Sparkles, X } from "lucide-react";
+import { LayoutGrid, MessageCircle, MessageSquarePlus, Plus, Sparkles, X } from "lucide-react";
 
 import { showToast } from "@/app/components/common/Toast";
 import { AiAssistantPanel, type AiRequest, type AiResult } from "@/app/components/editor-shell/AiAssistantPanel";
-import { DDALKKAK_APPS } from "@/app/components/editor-shell/apps";
+import { CommentListPanel } from "@/app/components/editor-shell/CommentListPanel";
+import { isUnread, type CommentAuthor } from "@/app/components/editor-shell/comments";
 import { EditorHeader, type ProfileMenuHandlers, type SaveState, type Viewer } from "@/app/components/editor-shell/EditorHeader";
 import { DockButtons, SideDock } from "@/app/components/editor-shell/SideDock";
 import { IconTooltip } from "@/app/components/viewer/IconTooltip";
@@ -13,6 +14,7 @@ import { f } from "@/app/styleTokens";
 import artHangul from "@/assets/home/editor/hangul.png";
 import artWord from "@/assets/home/editor/word.png";
 
+import { DocCommentLayer, useDocCommentMembers, type DocThread } from "./DocCommentLayer";
 import { DOC_TEMPLATES, type DocKind, type DocTemplate } from "./docTemplates";
 import { PaperThumb } from "./PaperThumb";
 import { TemplatePanel, TemplatePreview } from "./TemplatePanel";
@@ -22,7 +24,7 @@ import { TemplatePanel, TemplatePreview } from "./TemplatePanel";
  *   상단 바(공통 EditorHeader: 앱 ▾ · 파일 이름 · 저장 상태 · [템플릿] · ✨ 딸깍 AI · 🔔 · 공유 · 프로필)
  *   / [왼쪽 템플릿 패널] [가운데 오픈소스 에디터 자리] [오른쪽 딸깍 AI]
  * 가운데 편집 영역은 오픈소스 에디터라 고칠 수 없다. 이 프로젝트엔 그 에디터가 없어 템플릿·AI 결과만 보이는 목업이다.
- * 코멘트·기록·내보내기는 안쪽 에디터에 있어서 헤더에 두지 않는다(중복 금지).
+ * 코멘트는 UI 디자인 에디터와 같은 방식(헤더 "코멘트"로 남기기 + 코멘트 목록 패널, 쪽 위 핀). 기록·내보내기는 안쪽 에디터에 맡긴다.
  */
 
 const CONF: Record<DocKind, { appId: string; icon: string; ext: string; untitled: string; suggestions: string[]; example: string }> = {
@@ -37,11 +39,11 @@ const CONF: Record<DocKind, { appId: string; icon: string; ext: string; untitled
     example: "“제목을 '2026 사업계획서'로 넣고 아래에 일정 표를 만들어 줘”",
   },
 };
-const appName = (kind: DocKind) => DDALKKAK_APPS.flatMap((g) => g.apps).find((a) => a.id === CONF[kind].appId)?.name ?? "딸깍 문서";
+const appName = (kind: DocKind) => (kind === "hangul" ? "한글 편집기" : "딸깍 문서");
 const AI_SHORTCUT = "⌘J";
 
 interface AiDraft { title: string; sections: { heading: string; body: string }[] }
-interface DocFile { id: string; name: string; templateId?: string; ai?: AiDraft; updatedAt: number }
+interface DocFile { id: string; name: string; templateId?: string; ai?: AiDraft; threads?: DocThread[]; updatedAt: number }
 const isEmpty = (d: DocFile) => !d.templateId && !d.ai;
 const storeKey = (kind: DocKind) => `ddalkkak.doceditor.${kind}.v1`;
 let seq = 0;
@@ -67,7 +69,8 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu 
 }) {
   const conf = CONF[kind];
   const profile = useProfile();
-  const viewers: Viewer[] = [{ name: profile.name, avatarUrl: profile.avatarUrl, collabColor: profile.collabColor, isMe: true, activity: "이 탭" }];
+  const me: CommentAuthor = useMemo(() => ({ name: profile.name, avatarUrl: profile.avatarUrl, collabColor: profile.collabColor }), [profile]);
+  const members = useDocCommentMembers(me);
 
   const untitledName = (list: DocFile[]) => {
     const n = list.filter((d) => d.name.startsWith(conf.untitled)).length;
@@ -87,17 +90,29 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu 
     if (first.current) { first.current = false; return; }
     setSaveState({ kind: "saving" });
     const t = window.setTimeout(() => {
-      try { localStorage.setItem(storeKey(kind), JSON.stringify(docs.filter((d) => !isEmpty(d)))); setSaveState({ kind: "saved", at: Date.now() }); }
+      try { localStorage.setItem(storeKey(kind), JSON.stringify(docs.filter((d) => !isEmpty(d) || d.threads?.length))); setSaveState({ kind: "saved", at: Date.now() }); }
       catch { setSaveState({ kind: "error" }); }
     }, 400);
     return () => window.clearTimeout(t);
   }, [docs, kind]);
 
+  // 코멘트(UI 디자인 에디터와 같음): 코멘트 모드에서 쪽을 클릭해 남기고, 목록은 오른쪽 패널
+  const [commentMode, setCommentMode] = useState(false);
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const [pinsHidden, setPinsHidden] = useState(false);
+  const threads = active.threads ?? [];
+  const setThreads = (u: React.SetStateAction<DocThread[]>) => setDocs((l) => l.map((d) => (d.id === activeId ? { ...d, threads: typeof u === "function" ? u(d.threads ?? []) : u } : d)));
+  const unread = threads.filter((t) => isUnread(t, me)).length;
+  // 함께 보는 사람 — 프로토타입: 나 + 이 문서에 코멘트를 단 예시 팀원
+  const someoneElse = threads.some((t) => t.messages.some((m) => m.author.name !== me.name));
+  const viewers: Viewer[] = [{ ...me, isMe: true, activity: "이 탭" }, ...(someoneElse ? [{ ...threads.flatMap((t) => t.messages).find((m) => m.author.name !== me.name)!.author, activity: "방금 활동" }] : [])];
+  useEffect(() => { setOpenThreadId(null); setCommentMode(false); }, [activeId]);
+
   // 왼쪽 템플릿 패널: 빈 문서일 때 자동으로 열리고, 템플릿·AI로 내용이 생기면 닫힌다
   const [templatesOpen, setTemplatesOpen] = useState(true);
   const [preview, setPreview] = useState<DocTemplate | null>(null);
   // 오른쪽 딸깍 AI
-  const [dock, setDock] = useState<"ai" | null>("ai");
+  const [dock, setDock] = useState<"ai" | "comments" | null>("ai");
   const dockRef = useRef(dock);
   dockRef.current = dock;
   const [aiDot, setAiDot] = useState(false);
@@ -165,7 +180,24 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu 
     return { summary: `「${title}」 초안을 문서에 넣었어요. 항목 ${heads.length}개를 썼어요.`, credit, stepsDone: steps.length, stopped: false, addedCount: heads.length, target: { id: docId, label: title, meta: `${conf.ext.toUpperCase()} · 항목 ${heads.length}개` }, createdRootId: resultId };
   };
 
-  const dockTabs = [{ id: "ai", label: "딸깍 AI", hint: `딸깍 AI 열기/닫기 (${AI_SHORTCUT})`, icon: Sparkles, dot: aiDot && dock !== "ai", emphasized: true }];
+  const dockTabs = [
+    { id: "ai", label: "딸깍 AI", hint: `딸깍 AI 열기/닫기 (${AI_SHORTCUT})`, icon: Sparkles, dot: aiDot && dock !== "ai", emphasized: true },
+    { id: "comments", label: "코멘트 목록", hint: unread ? `코멘트 목록 (읽지 않음 ${unread})` : "코멘트 목록", icon: MessageCircle, badge: unread },
+  ];
+  const commentsPanel = (
+    <CommentListPanel
+      threads={threads}
+      me={me}
+      location={() => "1쪽"}
+      openThreadId={openThreadId}
+      hidden={pinsHidden}
+      onToggleHidden={() => setPinsHidden((v) => !v)}
+      onOpen={(t) => { setPinsHidden(false); setOpenThreadId(t.id); setThreads((all) => all.map((x) => (x.id === t.id ? { ...x, readAt: Date.now(), forcedUnread: false } : x))); }}
+      onMarkAllRead={() => setThreads((all) => all.map((t) => ({ ...t, readAt: Date.now(), forcedUnread: false })))}
+      emptyHint="열린 코멘트가 없어요. 상단 '코멘트'를 누르고 문서에서 남길 자리를 클릭해 보세요."
+      onClose={() => setDock(null)}
+    />
+  );
   const aiPanel = (
     <AiAssistantPanel
       runAi={runAi}
@@ -198,7 +230,6 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu 
         appName={appName(kind)}
         currentAppId={conf.appId}
         onSwitchApp={onSwitchApp}
-        onNewFile={() => { openNew(); setTemplatesOpen(true); }}
         fileName={`${active.name}.${conf.ext}`}
         onRenameFile={(name) => patch(activeId, { name: name.replace(new RegExp(`\\.${conf.ext}$`), "") })}
         // 저장 상태는 안쪽 오픈소스 에디터가 보여 준다(워드 "저장되지 않음"·자동 저장) — 헤더에 또 두지 않는다
@@ -207,7 +238,7 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu 
         profileMenu={profileMenu}
         onBack={onBack}
         onBell={onBellClick}
-        toolSlot={
+        toolSlot={<>
           <IconTooltip label={templatesOpen ? "템플릿 닫기" : "템플릿 열기"}><button
             type="button" aria-pressed={templatesOpen} onClick={() => setTemplatesOpen((v) => !v)}
             className="h-8 px-2.5 flex items-center gap-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff] hover:bg-black/[0.05]"
@@ -215,8 +246,16 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu 
           >
             <LayoutGrid size={15} />템플릿
           </button></IconTooltip>
-        }
-        actions={<DockButtons tabs={dockTabs} active={dock} onChange={(id) => { setDock(id as "ai" | null); setAiDot(false); }} />}
+          <IconTooltip label={commentMode ? "코멘트 모드 나가기 (Esc)" : "코멘트 남기기: 문서에서 자리를 클릭"}><button
+            type="button" aria-pressed={commentMode}
+            onClick={() => { setCommentMode((v) => !v); setOpenThreadId(null); if (!commentMode) { setDock("comments"); setPinsHidden(false); } }}
+            className="h-8 px-2.5 flex items-center gap-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff] hover:bg-black/[0.05]"
+            style={{ fontSize: 12.5, fontWeight: 600, color: commentMode ? "#111827" : "#475569", background: commentMode ? "rgba(0,0,0,0.06)" : undefined }}
+          >
+            <MessageSquarePlus size={15} />코멘트
+          </button></IconTooltip>
+        </>}
+        actions={<DockButtons tabs={dockTabs} active={dock} onChange={(id) => { setDock(id as "ai" | "comments" | null); setAiDot(false); }} />}
       />
 
       {/* 문서가 둘 이상 열렸을 때만 탭 줄 */}
@@ -252,7 +291,12 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu 
             <span className="ml-auto" style={{ fontSize: 11.5, color: "#94a3b8" }}>{kind === "hangul" ? "한글" : "워드"} 에디터 도구 모음 · 오픈소스 영역(목업)</span>
           </div>
           <div className="flex-1 overflow-auto ui-scroll py-8 px-6">
-            <div className="mx-auto bg-white" style={{ width: "min(100%, 680px)", minHeight: 880, boxShadow: "0 1px 3px rgba(15,23,42,0.08), 0 0 0 1px #e2e8f0", padding: active.ai ? "64px 72px" : tpl ? 0 : "64px 72px" }}>
+            {commentMode && (
+              <div className="sticky top-0 z-20 flex justify-center pointer-events-none" style={{ marginTop: -20, marginBottom: 4 }}>
+                <span className="rounded-full px-3 py-1.5" style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "#111827" }}>코멘트 모드: 남길 자리를 클릭하세요 · Esc로 나가기</span>
+              </div>
+            )}
+            <div className="relative mx-auto bg-white" style={{ width: "min(100%, 680px)", minHeight: 880, boxShadow: "0 1px 3px rgba(15,23,42,0.08), 0 0 0 1px #e2e8f0", padding: active.ai ? "64px 72px" : tpl ? 0 : "64px 72px" }}>
               {active.ai ? (
                 <article>
                   <h1 style={{ fontSize: 24, fontWeight: 800, color: "#111827", textAlign: "center", letterSpacing: "-0.4px" }}>{active.ai.title}</h1>
@@ -268,11 +312,17 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu 
               ) : (
                 <span className="inline-block w-px h-5 animate-pulse" style={{ background: "#111827" }} aria-label="빈 문서" />
               )}
+              <DocCommentLayer
+                key={activeId}
+                threads={threads} setThreads={setThreads} me={me} members={members}
+                commentMode={commentMode} exitCommentMode={() => setCommentMode(false)}
+                openThreadId={openThreadId} setOpenThreadId={setOpenThreadId} pinsHidden={pinsHidden}
+              />
             </div>
           </div>
         </main>
 
-        <SideDock rail={false} active={dock} onChange={(id) => setDock(id as "ai" | null)} tabs={[{ ...dockTabs[0], panel: aiPanel }]} />
+        <SideDock rail={false} active={dock} onChange={(id) => setDock(id as "ai" | "comments" | null)} tabs={[{ ...dockTabs[0], panel: aiPanel }, { ...dockTabs[1], panel: commentsPanel }]} />
       </div>
 
       {preview && (
