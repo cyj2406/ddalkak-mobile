@@ -170,7 +170,7 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu }
 
   // 오른쪽 패널 토글 — 홈 탭에선 파일 단위 기능(코멘트)을 숨기고 AI만. 버전 기록은 구현 전이라 버튼을 두지 않는다(빈 패널을 여는 버튼 = 동작 없는 버튼).
   const dockTabs = [
-    { id: "ai", label: "딸깍 AI", hint: `딸깍 AI 열기/닫기 (${AI_SHORTCUT})`, icon: Sparkles, dot: aiDot && dock !== "ai" },
+    { id: "ai", label: "딸깍 AI", hint: `딸깍 AI 열기/닫기 (${AI_SHORTCUT})`, icon: Sparkles, dot: aiDot && dock !== "ai", emphasized: true },
     ...(activeFile ? [{ id: "comments", label: "코멘트 목록", hint: unread ? `코멘트 목록 (읽지 않음 ${unread})` : "코멘트 목록 (남기기는 툴바 말풍선 · C)", icon: MessageCircle, badge: unread }] : []),
   ];
 

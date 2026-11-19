@@ -20,6 +20,8 @@ export interface DockTab {
   /** 배지 대신 점 — "끝났어요" 같은 알림 */
   dot?: boolean;
   disabled?: boolean;
+  /** 아이콘 옆에 이름을 함께 보여 주는 강조 버튼(딸깍 AI처럼 핵심 기능, 2026-11-19) */
+  emphasized?: boolean;
   panel: ReactNode;
 }
 
@@ -89,6 +91,21 @@ export function DockButtons({ tabs, active, onChange }: { tabs: Omit<DockTab, "p
       {tabs.map((t) => {
         const on = active === t.id;
         const Icon = t.icon;
+        if (t.emphasized) {
+          // 핵심 기능은 아이콘만 두지 않고 이름까지(Canva "Canva AI"·Notion "Notion AI" 버튼처럼). 닫혀 있어도 브랜드 색으로 보인다
+          return (
+            <IconTooltip key={t.id} label={t.hint ?? (on ? `${t.label} 닫기` : `${t.label} 열기`)}><button
+              type="button" aria-pressed={on} disabled={t.disabled} aria-label={t.label}
+              onClick={() => onChange(on ? null : t.id)}
+              className="relative h-8 pl-2.5 pr-3 mr-1 flex items-center gap-1.5 rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#4f7bff] disabled:opacity-35 hover:brightness-[0.97]"
+              style={{ ...f, background: color.surface.accent, color: color.brand, fontSize: 12.5, fontWeight: 700, letterSpacing: "-0.2px", boxShadow: on ? `inset 0 0 0 1.5px ${color.brand}` : undefined }}
+            >
+              <Icon size={15} color={color.brand} />
+              {t.label}
+              {t.dot && !on && <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full" style={{ background: color.brand, boxShadow: "0 0 0 2px #f8fafc" }} />}
+            </button></IconTooltip>
+          );
+        }
         return (
           <IconTooltip key={t.id} label={t.hint ?? (on ? `${t.label} 닫기` : `${t.label} 열기`)}><button
             type="button" aria-pressed={on} disabled={t.disabled}

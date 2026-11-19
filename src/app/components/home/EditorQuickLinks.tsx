@@ -12,7 +12,7 @@ import artUiDesign from "@/assets/home/editor/ui-design.png";
 import artVideo from "@/assets/home/editor/video-edit.png";
 
 /** 홈 아이콘 줄이 여는 에디터 — App이 워크스페이스 카테고리·결과 형식으로 바꿔 연다. */
-// "layer"는 홈 줄에서 빠졌지만(2026-11-13) 시안 A·B(variants/editorEngines)가 아직 쓴다.
+// "layer"는 홈 줄에서 빠졌지만(2026-11-13) App.openEditor가 레이어 분리 미니 에디터로 여는 길은 남아 있다.
 export type EditorKind = "image" | "word" | "hangul" | "ppt" | "excel" | "pdf" | "uidesign" | "video" | "layer";
 
 /**

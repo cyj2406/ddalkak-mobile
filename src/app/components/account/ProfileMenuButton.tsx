@@ -15,13 +15,10 @@ import { color, f, radius, typography } from "@/app/styleTokens";
  *
  * 2026-11-19 정리(ChatGPT·Claude·Canva·Figma·미리캔버스 계정 메뉴와 비교):
  *   - 머리: 아바타 + 이름(구독 중이면 플랜 배지) + 이메일.
- *   - 크레딧(같은 날 한 줄로 줄였다가 되돌림): 딸깍은 쓸 때마다 줄어드는 크레딧제라 구독제(ChatGPT·Canva)처럼
- *     플랜 이름 한 줄로는 부족하다. 크레딧제 서비스(Gamma·Leonardo·Runway·Suno)는 잔액을 숫자로 크게 보여 주고,
- *     충전(top up)과 요금제(upgrade)를 따로 두고, 사용 내역을 따로 연다. 그래서 카드 하나에
- *     [사용 가능 크레딧 · 내역 ›] / 잔액 20px / [크레딧 충전(주요)] [요금제]. 구독·추가 크레딧 내역과 만료일은 데이터가 아직
- *     "미정"이라 넣지 않았다(CreditBalanceCard 참고).
+ *   - 크레딧 카드는 정리 전 기존 모양 그대로(사용자 결정, 2026-11-19): [사용 가능 크레딧 · 내역 보기 ›] / 잔액 20px /
+ *     꽉 찬 "요금제 및 크레딧" 버튼(secondary). 같은 날 한 줄 → 충전·요금제 두 버튼으로 바꿔 봤다가 되돌렸다.
  *   - 묶음: [마이페이지 · 설정] / [튜토리얼 다시 보기 · 문의하기 · 커뮤니티] / [로그아웃]. 도움말 성격을 한 묶음으로.
- *   - 줄 높이 약 40px(예전 50px), 글자 14px. 메뉴 높이 약 544px에서 약 400px로.
+ *   - 줄 높이 약 40px(예전 50px), 글자 14px.
  *   - 커뮤니티·문의하기·로그아웃은 이전에 눌러도 아무 일이 없었다. 이제 각각 콜백을 받는다.
  * 크레딧이 상단바에 상시 보이면 만들기 전에 비용부터 계산하게 되므로, 잔액은 이 메뉴를 열어야 보인다.
  */
@@ -29,12 +26,10 @@ const ROW_CLASS = "w-full flex items-center gap-3 px-4 py-2.5 text-left outline-
 const ROW_TEXT = { ...f, fontWeight: 500, fontSize: 14, color: "#1e293b", letterSpacing: "-0.3px" } as const;
 const ICON = { size: 18, strokeWidth: 1.6, color: "#94a3b8" } as const;
 
-export function ProfileMenuButton({ onCreditClick, onTopUpClick, onHistoryClick, onStartTutorial, onSettingsOpen, onMyPageClick, onContact, onCommunity, onLogout }: {
-  /** "요금제": 요금제 및 크레딧 › 구독 */
+export function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onSettingsOpen, onMyPageClick, onContact, onCommunity, onLogout }: {
+  /** "요금제 및 크레딧" 버튼 */
   onCreditClick?: () => void;
-  /** "크레딧 충전": 요금제 및 크레딧 › 추가 충전 */
-  onTopUpClick?: () => void;
-  /** "내역 ›": 설정 › 크레딧(사용 내역) */
+  /** "내역 보기 ›": 설정 › 크레딧(사용 내역) */
   onHistoryClick?: () => void;
   /** 마이페이지(사진·이름·이메일) */
   onMyPageClick?: () => void;
@@ -120,10 +115,10 @@ export function ProfileMenuButton({ onCreditClick, onTopUpClick, onHistoryClick,
             </div>
           </div>
 
-          {/* 크레딧 카드: 잔액 · 내역 · 충전/요금제 */}
-          <div className="px-3 pb-2">
-            <div className="flex flex-col gap-3" style={{ background: color.surface.accent, borderRadius: radius.card, padding: "12px 14px 14px" }}>
-              <div className="flex flex-col gap-0.5 min-w-0">
+          {/* 크레딧 카드(기존 모양): 사용 가능 크레딧 · 내역 보기 / 잔액 / 요금제 및 크레딧 */}
+          <div className="px-4 pb-3">
+            <div className="flex flex-col gap-3" style={{ background: color.surface.accent, borderRadius: radius.card, padding: "14px 16px" }}>
+              <div className="flex flex-col gap-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span style={typography.caption}>사용 가능 크레딧</span>
                   {onHistoryClick && (
@@ -134,7 +129,7 @@ export function ProfileMenuButton({ onCreditClick, onTopUpClick, onHistoryClick,
                       className="shrink-0 -my-1 -mr-1.5 px-1.5 py-1 rounded-md outline-none transition-colors hover:bg-black/[0.06] focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[#4f7bff]"
                       style={{ ...f, fontWeight: 600, fontSize: 12, color: color.brand, letterSpacing: "-0.2px" }}
                     >
-                      내역 ›
+                      내역 보기 ›
                     </button>
                   )}
                 </div>
@@ -142,10 +137,9 @@ export function ProfileMenuButton({ onCreditClick, onTopUpClick, onHistoryClick,
                   {creditBalance.toLocaleString()}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="primary" size="md" fullWidth role="menuitem" style={{ whiteSpace: "nowrap" }} onClick={run(onTopUpClick)}>크레딧 충전</Button>
-                <Button variant="secondary" size="md" fullWidth role="menuitem" style={{ whiteSpace: "nowrap" }} onClick={run(onCreditClick)}>요금제</Button>
-              </div>
+              <Button variant="secondary" size="md" fullWidth role="menuitem" style={{ whiteSpace: "nowrap" }} onClick={run(onCreditClick)}>
+                요금제 및 크레딧
+              </Button>
             </div>
           </div>
 

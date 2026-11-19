@@ -1,6 +1,6 @@
 # 에디터 중심 홈 개편 기획서
 
-> 브랜치 `feat/editor-centric-home` · 작성 2026-11-13 · 상태: 시안 탐색 중
+> 브랜치 `feat/editor-centric-home` · 작성 2026-11-13 · **상태: 2026-11-19 시안 A·B와 스위처 삭제(채택 안 함). 아래는 기록용.** 홈은 기존 `HomeScreen` 하나.
 > 현재 배포본(main, https://main-redesign.vercel.app/)은 그대로 두고, 같은 앱 안에서 시안을 바꿔 가며 비교한다.
 
 ---

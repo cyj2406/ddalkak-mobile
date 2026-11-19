@@ -155,20 +155,25 @@ export function EditorHeader({
   );
 }
 
-/** 저장 상태 — 저장 버튼 대신(자동 저장). 위치(임시 보관함)를 함께 보여 준다 */
+/**
+ * 저장 상태(자동 저장). 2026-11-19 간소화: 평소(저장됨)엔 구름 아이콘만 두고 위치·시각은 툴팁으로.
+ * 글자는 저장 중·저장 못 함처럼 알아야 할 때만 보인다(Google Docs·Canva 방식). 예전엔 "임시 보관함 · 저장됨 · 39초 전"이 늘 붙어 있었다.
+ */
 function SaveBadge({ state, location }: { state?: SaveState; location?: string }) {
-  const text =
-    !state ? location
-      : state.kind === "saving" ? "저장 중…"
-      : state.kind === "saved" ? `저장됨 · ${savedLabel(state.at)}`
-      : state.kind === "error" ? "저장 못 함: 이 브라우저 저장 공간 부족"
-      : "이 브라우저에 저장";
-  const Icon = state?.kind === "saving" ? Loader2 : Cloud;
+  if (state?.kind === "saving") {
+    return <span className="shrink-0 inline-flex items-center gap-1 ml-1" style={{ fontSize: 11.5, color: "#94a3b8" }} aria-live="polite"><Loader2 size={12} className="animate-spin" />저장 중…</span>;
+  }
+  if (state?.kind === "error") {
+    return <span className="shrink-0 inline-flex items-center gap-1 ml-1" style={{ fontSize: 11.5, color: "#b45309" }} aria-live="polite"><Cloud size={12} />저장 못 함: 이 브라우저 저장 공간 부족</span>;
+  }
+  const where = location ? `${location}에 ` : "";
+  const label = !state ? (location ?? "") : state.kind === "saved" ? `${where}저장됨 · ${savedLabel(state.at)}` : `${where}이 브라우저에 저장`;
   return (
-    <span className="shrink-0 hidden md:inline-flex items-center gap-1 ml-1" style={{ fontSize: 11.5, color: state?.kind === "error" ? "#b45309" : "#94a3b8" }} title={location ? `${location} · ${text}` : text} aria-live="polite">
-      <Icon size={12} className={state?.kind === "saving" ? "animate-spin" : undefined} />
-      {location && state ? `${location} · ` : ""}{text}
-    </span>
+    <IconTooltip label={label}>
+      <span className="shrink-0 inline-flex items-center justify-center size-6 rounded-md ml-0.5" tabIndex={0} aria-label={label} style={{ color: "#94a3b8" }}>
+        <Cloud size={14} />
+      </span>
+    </IconTooltip>
   );
 }
 

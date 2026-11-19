@@ -369,13 +369,14 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 
 - `src/app/components/pricing/*`(PricingPage, UsageSummary, SubscriptionTab, TopUpTab, PurchaseConfirmDialog, BillingManagementPage, SubscriptionCompletePage, CancelSubscriptionDialog, PaymentFailedAlert)
 - `src/app/components/settings/SettingsCreditTab.tsx`(설정 크레딧 탭 — App.tsx에서 추출)
-- `src/app/components/account/ProfileMenuButton.tsx`(크레딧 카드 + 충전·요금제 버튼. 2026-11-19 App.tsx에서 옮겨 서비스 상단바와 에디터 공통 헤더가 같이 쓴다), `SettingsModal`(크레딧 탭 렌더만 위임)
+- `src/app/components/account/ProfileMenuButton.tsx`(내 크레딧 카드 + CTA. 2026-11-19 App.tsx에서 옮겨 서비스 상단바와 에디터 공통 헤더가 같이 쓴다), `SettingsModal`(크레딧 탭 렌더만 위임)
 - `src/app/App.tsx`의 `CreditHistoryScreen`(잔액 카드, 리스트 카드, 필터 행, "+크레딧 충전" 버튼 — 화면 구조·필터·정렬·뒤로가기 등 기존 동작은 그대로 유지)
 - `src/app/components/common/{Button,Tabs,ScrollableChips,Badge,Modal}.tsx`(공통 컴포넌트 자체)
 - `src/app/state/subscription.ts`(신규 — 구독·결제·크레딧 버킷 mock 스토어)
 - `src/app/components/mypage/*`(마이페이지, 2026-11-13 — 아래 "마이페이지" 절)
 - `src/app/components/uidesign/*`(딸깍 UI 디자인 에디터, 2026-11-13 — 아래 해당 절. 에디터 전용 스타일이라 서비스 기준 아님)
 - `src/app/components/editor-shell/*`(에디터 공통 셸 — 상단 바·오른쪽 도크·공유·AI·코멘트 목록, 2026-11-13)
+- `src/app/components/doceditor/*`(한글·워드 편집기 셸 · 템플릿 패널, 2026-11-19, docs/doc-editor.md. 셸은 서비스 토큰 `color.brand`·`f`·`Button`·`Modal`을 쓴다)
 - 서비스 전역의 브랜드 블루 색상값(아래 "1) 브랜드 블루" 참고) — 홈/검색/템플릿 화면의
   **레이아웃·문구는 건드리지 않고 색상값만** `#2563eb`→`color.brand`, `#1d4ed8`→`color.brandHover`,
   `#eff5ff`→`color.surface.accent`로 맞췄다. 대상 파일: `HomeSearch.tsx`,
@@ -401,7 +402,7 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
   `SideDock`(오른쪽 세로 탭 + 패널, 접어도 내용 유지), `SharePopover`, `AiAssistantPanel`(입력창은 ＋ 첨부·실행 방식만, 프로젝트 자료·대화 기록),
   `CommentListPanel` + `comments.ts`(스레드 상태·읽음 규칙). 셸은 서비스 토큰(`color.brand`, `f`)을 쓰고, 에디터 강조색은 `accent` prop으로만 받는다.
   새 에디터를 만들 때 상단 바·오른쪽 패널을 새로 그리지 말고 이 셸을 쓴다.
-  2026-11-19: 도크 토글은 오른쪽 탭 줄 대신 상단 바 `actions` 자리의 `DockButtons`(아이콘 3개)로 옮겼다(`SideDock rail={false}`). 에디터 안에서는 서비스 사이드바를 숨긴다.
+  2026-11-19: 도크 토글은 오른쪽 탭 줄 대신 상단 바 `actions` 자리의 `DockButtons`(아이콘 3개)로 옮겼다(`SideDock rail={false}`). 딸깍 AI만 `emphasized`로 "✨ 딸깍 AI" 글자 버튼(브랜드 연한 바탕)이다. 에디터 안에서는 서비스 사이드바를 숨긴다.
 - **2026-11-19 겹침 정리**: `EditorHeader`의 아바타 묶음을 없애고 `viewers`(지금 함께 보는 사람)를 받아 공유 팝오버 "지금 함께 보는 중"과 공유 버튼 인원 배지로만 보여 준다. 에디터 안에는 테마(다크) 토글을 두지 않는다 — 설정 › 화면 설정 한 곳.
 - **공통 헤더 v3(2026-11-19)** — 도구 공통 헤더 기준은 [`docs/editor-common-header.md`](editor-common-header.md). `EditorHeader`는 ①정체성(앱 이름 ▾ 전환·파일 이름·저장 상태) ②도구 슬롯 ③패널 토글 ④알림 ⑤결과물(▷·내보내기·공유) 다섯 영역이고, 버튼은 `capabilities`로 켠다. 공유가 없는 도구는 내보내기가 주요 버튼.
 - **프로필 메뉴 하나로(2026-11-19)**: 에디터 헤더의 작은 계정 메뉴를 없애고 서비스와 같은 `account/ProfileMenuButton`을 쓴다(아래 "프로필 메뉴" 절). 고치면 두 곳에 같이 반영된다.
@@ -427,22 +428,15 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 
 서비스 상단바와 에디터 공통 헤더가 같이 쓴다. 동작은 App.tsx의 `profileMenu` 객체 하나로 넘긴다.
 - 머리: 아바타 40 + 이름(구독 중이면 플랜 배지) + 이메일.
-- 크레딧 카드(`color.surface.accent` 바탕): [사용 가능 크레딧 · 내역 ›] / 잔액 20px / [크레딧 충전(primary)] [요금제(secondary)] 두 버튼(`Button` md).
-  충전 → 요금제 및 크레딧 › 추가 충전, 요금제 → 구독 탭, 내역 → 설정 › 크레딧.
-  근거: 딸깍은 쓸 때마다 줄어드는 크레딧제라 구독제(ChatGPT·Canva) 메뉴처럼 플랜 한 줄로 줄이지 않는다. 크레딧제 서비스는 잔액을 숫자로 크게 보여 주고
-  ([Gamma](https://help.gamma.app/en/articles/7834324-how-do-ai-credits-work-in-gamma): 상단 잔액·아바타 메뉴, [Leonardo](https://intercom.help/leonardo-ai/en/articles/9044700-tokens-faq): 잔액·내역,
-  [Runway](https://help.runwayml.com/hc/en-us/articles/26116703542803): 사용 내역 표, [Suno](https://help.suno.com/en/articles/2525441): 사이드바 잔액), 충전과 요금제 변경을 따로 둔다.
-  (같은 날 한 줄 "크레딧 N · 충전 ›"로 줄였다가 이 근거로 되돌렸다.) 구독·추가 크레딧 나눔과 만료일은 데이터가 "미정"이라 넣지 않았다.
-- 묶음: [마이페이지 · 설정] / [튜토리얼 다시 보기 · 문의하기 · 커뮤니티] / [로그아웃]. 줄 높이 약 40px, 글자 14px, 폭 268px. 메뉴 높이 544px → 489px.
+- 크레딧 카드는 기존 모양 그대로(2026-11-19 사용자 결정): `color.surface.accent` 바탕, [사용 가능 크레딧 · 내역 보기 ›] / 잔액 20px / 꽉 찬 "요금제 및 크레딧"(`Button` secondary md).
+  내역 보기 → 설정 › 크레딧, 요금제 및 크레딧 → 요금제 페이지. 같은 날 한 줄("크레딧 N · 충전 ›"), 충전·요금제 두 버튼으로 바꿔 봤다가 되돌렸다.
+- 묶음: [마이페이지 · 설정] / [튜토리얼 다시 보기 · 문의하기 · 커뮤니티] / [로그아웃]. 줄 높이 약 40px, 글자 14px, 폭 268px. 
 - 문의하기·커뮤니티·로그아웃은 실제 주소·로그인 연동 전이라 "준비 중" 토스트(`onContact`·`onCommunity`·`onLogout`만 바꾸면 된다).
 
-## 에디터 중심 홈 시안 (2026-11-13, 브랜치 `feat/editor-centric-home`)
+## 에디터 중심 홈 시안 (2026-11-13, 2026-11-19 삭제)
 
-기존 홈(`HomeScreen`)은 그대로 두고, `src/app/components/home/variants/`에 시안을 따로 만든다.
-`?home=a|b` 또는 화면 왼쪽 아래 스위처로 바꿔 본다. 기획·시안 설명·한계는
-[`docs/home-editor-redesign.md`](home-editor-redesign.md)에 있다. 시안 코드는 기존 토큰(`color`, `radius`, `shadow`,
-`f`)과 `Badge`·`HomeSectionHeader`·`showToast`를 재사용하고, 새 토큰은 추가하지 않았다.
-**시안이 확정되기 전까지 이 폴더의 패턴을 서비스 기준으로 보지 말 것.**
+시안 A(런처형)·B(에디터 우선형)와 왼쪽 아래 시안 스위처(`?home=`)는 2026-11-19에 사용자 결정으로 지웠다
+(`src/app/components/home/variants/` 폴더 삭제). 홈은 기존 `HomeScreen` 하나다. 당시 기획은 [`docs/home-editor-redesign.md`](home-editor-redesign.md)에 기록으로만 남는다.
 
 ## 홈 화면 재구성 (2026-09-17)
 

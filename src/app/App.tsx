@@ -38,10 +38,6 @@ import { EditorQuickLinks, type EditorKind } from "@/app/components/home/EditorQ
 import SearchResultsScreen from "@/app/components/home/SearchResultsScreen";
 import AllTemplatesScreen from "@/app/components/home/AllTemplatesScreen";
 import CardNewsEditorScreen from "@/app/components/home/CardNewsEditorScreen";
-import HomeLauncher from "@/app/components/home/variants/HomeLauncher";
-import HomeEditorFirst from "@/app/components/home/variants/HomeEditorFirst";
-import { HomeVariantSwitcher } from "@/app/components/home/variants/HomeVariantSwitcher";
-import { useHomeVariant } from "@/app/components/home/variants/homeVariants";
 import RequestHelpScreen, { type RequestHandoff } from "@/app/components/home/RequestHelpScreen";
 import { RequestCardsPanel } from "@/app/components/workspace/RequestCardsPanel";
 import { getTaskById, type TaskTemplate } from "@/app/data/tasks";
@@ -56,6 +52,8 @@ import { SettingsBillingTab } from "@/app/components/settings/SettingsBillingTab
 import { MyPage } from "@/app/components/mypage/MyPage";
 import { ProfileMenuButton } from "@/app/components/account/ProfileMenuButton";
 import { UiDesignEditor } from "@/app/components/uidesign/UiDesignEditor";
+import { DocEditor } from "@/app/components/doceditor/DocEditor";
+import type { DocKind } from "@/app/components/doceditor/docTemplates";
 import { ProfileAvatar } from "@/app/components/mypage/ProfileAvatar";
 import { useProfile } from "@/app/state/profile";
 
@@ -5247,13 +5245,18 @@ export default function App() {
   /** 레이어 분리 — 홈 아이콘 줄에서 바로 여는 이미지 미니 에디터(텍스트 분리 패널 포함). 워크스페이스를 거치지 않는다. */
   const [layerEditorOpen, setLayerEditorOpen] = useState(false);
   // 딸깍 UI 디자인 에디터(2026-11-13) — 워크스페이스처럼 본문 컬럼을 덮는다. docs/ui-design-editor.md
-  const [uiDesignOpen, setUiDesignOpen] = useState(false);
+  const [uiDesignOpen, setUiDesignOpenRaw] = useState(false);
+  // 한글·워드 편집기(2026-11-19) — UI 디자인 에디터와 같은 집중 모드. docs/doc-editor.md
+  const [docEditor, setDocEditor] = useState<DocKind | null>(null);
+  /** 에디터(UI 디자인·한글·워드)는 한 번에 하나. 닫을 때는 둘 다 닫는다 */
+  const setUiDesignOpen = (open: boolean) => { setUiDesignOpenRaw(open); setDocEditor(null); };
+  const editorOpen = uiDesignOpen || !!docEditor;
   /** 홈 아이콘 줄 → 포맷 에디터(빈 템플릿 워크스페이스). 레이어 분리만 이미지 미니 에디터를 바로 연다. */
-  const [homeVariant] = useHomeVariant();
   const openEditor = (kind: EditorKind) => {
     if (kind === "layer") { setLayerEditorOpen(true); return; }
     // 도구모음 편집기와 하나씩 연결하기 전까지 새 항목은 안내만(2026-11-13)
     if (kind === "uidesign") { setUiDesignOpen(true); return; }
+    if (kind === "hangul" || kind === "word") { setUiDesignOpenRaw(false); setDocEditor(kind); return; }
     if (kind === "pdf") { showToast("PDF 편집기는 준비 중이에요."); return; }
     const target: Record<Exclude<EditorKind, "layer" | "pdf" | "uidesign">, [WorkspaceCategory, string]> = {
       image: ["image", "전체"], word: ["docs", "워드"], hangul: ["docs", "한글"],
@@ -5353,7 +5356,7 @@ export default function App() {
    * "들어갈 때/나올 때" 한 번씩만 건드리므로, 그 사이에 사용자가 직접 펴거나 접은
    * 선택은 그대로 남는다.
    */
-  const inWorkspace = !!workspace || uiDesignOpen;
+  const inWorkspace = !!workspace || editorOpen;
   useEffect(() => { setSidebarCollapsed(inWorkspace); }, [inWorkspace]);
 
   const isSubScreen = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai", "notifications-all", "search", "templates", "cardnews-editor", "request-help", "pricing", "subscription-complete", "mypage"].includes(screen);
@@ -5371,9 +5374,17 @@ export default function App() {
 
   /** 프로필 메뉴 동작: 서비스 상단바와 에디터 공통 헤더가 같이 쓴다. 다른 화면으로 가는 항목은 에디터를 닫고 간다.
    *  문의하기·커뮤니티·로그아웃은 실제 주소·로그인 연동 전이라 안내만(2026-11-19). */
+  /** 공통 헤더 앱 이름 ▾ — 이 프로젝트에 있는 편집기로 연결, 없는 도구는 안내(에디터는 닫지 않는다) */
+  const switchApp = (appId: string) => {
+    const kinds: Record<string, EditorKind> = { word: "word", hangul: "hangul", excel: "excel", ppt: "ppt", image: "image", video: "video", uidesign: "uidesign" };
+    const k = kinds[appId];
+    if (!k) { showToast("이 도구는 아직 이 화면에서 열 수 없어요(준비 중)."); return; }
+    setUiDesignOpen(false);
+    openEditor(k);
+  };
+
   const profileMenu: React.ComponentProps<typeof ProfileMenuButton> = {
     onCreditClick: () => { setUiDesignOpen(false); openPricing("subscription"); },
-    onTopUpClick: () => { setUiDesignOpen(false); openPricing("topup"); },
     onHistoryClick: () => openSettingsAt("크레딧"),
     onMyPageClick: () => { setUiDesignOpen(false); navigate("mypage"); },
     onSettingsOpen: () => openSettingsAt("화면 설정"),
@@ -5389,7 +5400,7 @@ export default function App() {
     <div className="bg-[#f8fafc] h-[100dvh] w-full flex overflow-hidden" style={f}>
       <ToastHost />
       {/* UI 디자인 에디터는 집중 모드 — 서비스 사이드바를 숨긴다(나가기는 에디터 상단 ‹). docs/ui-design-editor.md "1-3" */}
-      {!uiDesignOpen && <SidebarDrawer
+      {!editorOpen && <SidebarDrawer
         variant={isDesktop ? "docked" : "drawer"}
         open={isDesktop || drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -5411,14 +5422,7 @@ export default function App() {
         bellRef={bellRef}
         profileMenu={profileMenu}
       />
-      {/* 홈 시안 전환(검토용) — current 는 기존 홈 그대로. docs/home-editor-redesign.md */}
-      {screen === "home" && homeVariant === "a" && (
-        <HomeLauncher onOpenEditor={openEditor} onOpenCardNews={() => navigate("cardnews-editor")} onSearch={openSearch} onHelp={() => navigate("request-help")} onViewAllTemplates={() => navigate("templates")} />
-      )}
-      {screen === "home" && homeVariant === "b" && (
-        <HomeEditorFirst onOpenEditor={openEditor} onOpenCardNews={() => navigate("cardnews-editor")} onSearch={openSearch} onHelp={() => navigate("request-help")} onViewAllTemplates={() => navigate("templates")} />
-      )}
-      {screen === "home" && homeVariant === "current" && (
+      {screen === "home" && (
         <HomeScreen
           // 카드(전체 기능·대표 카테고리·바로 시작하기 캐러셀)를 눌러도 더 이상 아무
           // 화면도 열지 않는다(2026-09-18, "템플릿을 골라 주세요" 목록 화면 제거) —
@@ -5576,14 +5580,17 @@ export default function App() {
           onBack={() => setUiDesignOpen(false)}
           onBellClick={() => setNotifOpen(true)}
           profileMenu={profileMenu}
-          onSwitchApp={(appId) => {
-            // 공통 헤더 앱 이름 ▾ — 이 프로젝트에 있는 편집기로 연결, 없는 도구는 안내
-            const kinds: Record<string, EditorKind> = { word: "word", hangul: "hangul", excel: "excel", ppt: "ppt", image: "image", video: "video" };
-            const k = kinds[appId];
-            if (!k) { showToast("이 도구는 아직 이 화면에서 열 수 없어요(준비 중)."); return; }
-            setUiDesignOpen(false);
-            openEditor(k);
-          }}
+          onSwitchApp={switchApp}
+        />
+      )}
+      {docEditor && (
+        <DocEditor
+          key={docEditor}
+          kind={docEditor}
+          onBack={() => setDocEditor(null)}
+          onBellClick={() => setNotifOpen(true)}
+          profileMenu={profileMenu}
+          onSwitchApp={switchApp}
         />
       )}
       {workspace && (
@@ -5603,8 +5610,7 @@ export default function App() {
       ) : (
         <NotificationsPanel onClose={() => setNotifOpen(false)} onViewAll={() => { setNotifOpen(false); navigate("notifications-all"); }} />
       ))}
-      {screen === "home" && !workspace && !uiDesignOpen && <HomeVariantSwitcher />}
-      <HomeOnboarding enabled={screen === "home" && homeVariant === "current" && !workspace && !uiDesignOpen && !settingsOpen} isDesktop={isDesktop} replayToken={onboardingReplay} />
+      <HomeOnboarding enabled={screen === "home" && !workspace && !editorOpen && !settingsOpen} isDesktop={isDesktop} replayToken={onboardingReplay} />
       {settingsOpen && (
         <SettingsModal
           key={settingsNavKey}

@@ -52,7 +52,7 @@ const toAttachment = (file: File): AiAttachment => ({
 });
 
 export function AiAssistantPanel({
-  runAi, planAi, context, suggestions, example, commandCount = 634, onAttachSelection, onShowResult, onUndoResult, onFinished, onClose, closeShortcut,
+  runAi, planAi, context, suggestions, example, commandCount = 634, onAttachSelection, onShowResult, onUndoResult, onFinished, onClose, closeShortcut, prefill,
 }: {
   runAi: RunAi;
   planAi: PlanAi;
@@ -69,6 +69,8 @@ export function AiAssistantPanel({
   /** 머리 왼쪽 » 접기 버튼 — 도크가 넘긴다 */
   onClose?: () => void;
   closeShortcut?: string;
+  /** 입력창에 문장을 넣어 둔다(보내기는 사용자가). key가 바뀔 때마다 다시 넣는다. 예: 템플릿 "AI로 내용 채우기" */
+  prefill?: { text: string; key: number };
 }) {
   const [convs, setConvs] = useState<Conversation[]>([{ id: 1, title: "새 대화", msgs: [], at: Date.now() }]);
   const [cur, setCur] = useState(1);
@@ -92,6 +94,14 @@ export function AiAssistantPanel({
   const projFileRef = useRef<HTMLInputElement>(null);
   const idRef = useRef(1);
 
+  useEffect(() => {
+    if (!prefill) return;
+    setInput(prefill.text);
+    requestAnimationFrame(() => {
+      const ta = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="딸깍 AI에게 요청"]');
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    });
+  }, [prefill?.key]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [msgs]);
   useEffect(() => {
     if (!menu) return;
