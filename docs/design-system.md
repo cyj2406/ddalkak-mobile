@@ -369,11 +369,13 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 
 - `src/app/components/pricing/*`(PricingPage, UsageSummary, SubscriptionTab, TopUpTab, PurchaseConfirmDialog, BillingManagementPage, SubscriptionCompletePage, CancelSubscriptionDialog, PaymentFailedAlert)
 - `src/app/components/settings/SettingsCreditTab.tsx`(설정 크레딧 탭 — App.tsx에서 추출)
-- `src/app/App.tsx`의 `ProfileMenuButton`(내 크레딧 카드 + CTA), `SettingsModal`(크레딧 탭 렌더만 위임)
+- `src/app/components/account/ProfileMenuButton.tsx`(크레딧 카드 + 충전·요금제 버튼. 2026-11-19 App.tsx에서 옮겨 서비스 상단바와 에디터 공통 헤더가 같이 쓴다), `SettingsModal`(크레딧 탭 렌더만 위임)
 - `src/app/App.tsx`의 `CreditHistoryScreen`(잔액 카드, 리스트 카드, 필터 행, "+크레딧 충전" 버튼 — 화면 구조·필터·정렬·뒤로가기 등 기존 동작은 그대로 유지)
 - `src/app/components/common/{Button,Tabs,ScrollableChips,Badge,Modal}.tsx`(공통 컴포넌트 자체)
 - `src/app/state/subscription.ts`(신규 — 구독·결제·크레딧 버킷 mock 스토어)
 - `src/app/components/mypage/*`(마이페이지, 2026-11-13 — 아래 "마이페이지" 절)
+- `src/app/components/uidesign/*`(딸깍 UI 디자인 에디터, 2026-11-13 — 아래 해당 절. 에디터 전용 스타일이라 서비스 기준 아님)
+- `src/app/components/editor-shell/*`(에디터 공통 셸 — 상단 바·오른쪽 도크·공유·AI·코멘트 목록, 2026-11-13)
 - 서비스 전역의 브랜드 블루 색상값(아래 "1) 브랜드 블루" 참고) — 홈/검색/템플릿 화면의
   **레이아웃·문구는 건드리지 않고 색상값만** `#2563eb`→`color.brand`, `#1d4ed8`→`color.brandHover`,
   `#eff5ff`→`color.surface.accent`로 맞췄다. 대상 파일: `HomeSearch.tsx`,
@@ -387,20 +389,52 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 계열로 기록만 해 둔다. **홈 화면의 레이아웃은 이후 재구성했다 — 아래 "홈 화면 재구성"
 참고.**
 
-## 마이페이지 (2026-11-13) — `src/app/components/mypage/`, `src/app/state/profile.ts`
+## 딸깍 UI 디자인 에디터 (2026-11-13) — `src/app/components/uidesign/`
 
-공동 작업 기능으로 이름·사진이 다른 사람 화면에 보이게 되면서 추가했다. 진입: 프로필 메뉴 맨 위 "마이페이지"(`UserRound` 아이콘) → `screen = "mypage"`(뒤로 가기 있음).
+홈 "편집기 바로 열기 > UI 디자인"으로 여는 피그마형 편집기. 기획·코멘트 로직·AI 패널 흐름은 [`docs/ui-design-editor.md`](ui-design-editor.md).
+- **에디터 전용 스타일**: 선택·활성 도구는 `EDITOR_ACCENT`(#14b86e, `uidesign/model.ts`) — dev 캡처의 초록. 서비스 화면에 쓰지 말 것. 패널 글자는 10.5~12.5px로
+  서비스 토큰보다 작다(편집기 밀도). 이 폴더의 크기·색을 서비스 기준으로 가져가지 않는다.
+- **서비스와 공유하는 것**: 폰트 `f`, 토스트 `showToast`, 아바타 `ProfileAvatar`(코멘트 작성자·공유 목록 = 마이페이지 프로필), 크레딧 잔액(`setCreditBalance` — AI 사용 시 실제 차감),
+  AI 패널의 보내기·모드 버튼은 서비스 브랜드 블루(`color.brand`) — 딸깍 AI는 서비스 공통 기능이라.
+- App: `uiDesignOpen` 상태로 워크스페이스처럼 본문 컬럼을 덮고 사이드바를 아이콘 레일로 접는다. 사이드바 이동·튜토리얼 다시 보기 때 닫힌다.
+- **에디터 공통 셸 `src/app/components/editor-shell/`(2026-11-13 v2)** — 문서·시트·슬라이드 에디터도 같이 쓸 것: `EditorHeader`(상단 바 — 공유는 오른쪽 끝 채운 버튼),
+  `SideDock`(오른쪽 세로 탭 + 패널, 접어도 내용 유지), `SharePopover`, `AiAssistantPanel`(입력창은 ＋ 첨부·실행 방식만, 프로젝트 자료·대화 기록),
+  `CommentListPanel` + `comments.ts`(스레드 상태·읽음 규칙). 셸은 서비스 토큰(`color.brand`, `f`)을 쓰고, 에디터 강조색은 `accent` prop으로만 받는다.
+  새 에디터를 만들 때 상단 바·오른쪽 패널을 새로 그리지 말고 이 셸을 쓴다.
+  2026-11-19: 도크 토글은 오른쪽 탭 줄 대신 상단 바 `actions` 자리의 `DockButtons`(아이콘 3개)로 옮겼다(`SideDock rail={false}`). 에디터 안에서는 서비스 사이드바를 숨긴다.
+- **2026-11-19 겹침 정리**: `EditorHeader`의 아바타 묶음을 없애고 `viewers`(지금 함께 보는 사람)를 받아 공유 팝오버 "지금 함께 보는 중"과 공유 버튼 인원 배지로만 보여 준다. 에디터 안에는 테마(다크) 토글을 두지 않는다 — 설정 › 화면 설정 한 곳.
+- **공통 헤더 v3(2026-11-19)** — 도구 공통 헤더 기준은 [`docs/editor-common-header.md`](editor-common-header.md). `EditorHeader`는 ①정체성(앱 이름 ▾ 전환·파일 이름·저장 상태) ②도구 슬롯 ③패널 토글 ④알림 ⑤결과물(▷·내보내기·공유) 다섯 영역이고, 버튼은 `capabilities`로 켠다. 공유가 없는 도구는 내보내기가 주요 버튼.
+- **프로필 메뉴 하나로(2026-11-19)**: 에디터 헤더의 작은 계정 메뉴를 없애고 서비스와 같은 `account/ProfileMenuButton`을 쓴다(아래 "프로필 메뉴" 절). 고치면 두 곳에 같이 반영된다.
+- **`showToast(message, tone, action?)`(2026-11-19)** — 공용 토스트에 선택적 행동 버튼("되돌리기" 등). 행동이 있으면 두 배 오래 보이고, 사라진 뒤에는 클릭되지 않는다. 기존 호출은 그대로.
+- **아이콘 버튼 툴팁(2026-11-19)** — 글자 없는 아이콘 버튼은 `components/viewer/IconTooltip`으로 "무엇을 하는지 + 단축키"를 보여 준다(브라우저 `title`과 함께 쓰지 않음). UI 디자인 에디터·공통 셸 전체 적용, 규칙은 `docs/editor-common-header.md` "8".
+- **`.ui-scroll`(theme.css, 2026-11-19)** — 패널 스크롤바를 마우스를 올렸을 때만 6px로 보이게 하는 공용 클래스. 입력칸용 `.ui-field-scroll`과 나눴다. 에디터 레이어·대화·속성·홈 목록에 쓴다. 결정 근거는 `docs/ui-design-editor.md` "0. v2에서 바꾼 결정 요약"·"5".
 
-- **구조**: `PageContainer` + `PageHeader` → 프로필 카드(사진·이름·플랜 배지) / 기본 정보 / 공동 작업 / 계정. 1200px 이상은 오른쪽 320px에
-  "공동 작업자에게 이렇게 보여요" 미리보기가 sticky로 붙고, 그 아래 폭에서는 공동 작업 카드 안으로 들어간다.
-- **편집 방식(Canva 계정 설정)**: `라벨 | 값 | 수정` 한 줄 → 누르면 그 줄만 `InputField` singleline(48px) + 글자 수 + 취소/저장.
-  한 번에 한 줄만 열린다. 페이지 전체 저장 버튼 없음. Enter 저장(한글 조합 중 제외), Esc 취소. 이름만 필수(20자), 직무 20자, 소개 40자.
-- **사진(Notion·Canva)**: 아바타 카메라 버튼 / "사진 변경 · 삭제". 가운데 기준 256px 정사각형 JPEG로 줄여 저장. 삭제하면 이니셜 + 협업 색상.
-- **협업 색상(Figma·Miro 멀티플레이어)**: `COLLAB_COLORS` 8색(`state/profile.ts`). UI 색이 아니라 사람 구분용 데이터 색이라 `color` 토큰에 넣지 않았다 — 다른 화면 UI에 쓰지 말 것.
-- **팀·초대(Canva·Figma)**: 참여 중인 팀 + 역할 `Badge`(소유자 brand / 그 외 neutral), 받은 초대 수락·거절.
-- **공통 적용**: 프로필 메뉴·상단 아바타의 이름·이메일·사진이 하드코딩에서 `useProfile()`로 바뀌었다 — 마이페이지에서 고치면 바로 반영. 아바타는 `mypage/ProfileAvatar`.
-- **한계**: 서버 없음 — 값은 이 브라우저 localStorage(`ddalkkak.profile.v1`)에만. 팀·초대는 예시 데이터. 계정 삭제는 토스트 안내만.
-- 새 토큰 없음. 줄 끝 "수정" 텍스트 버튼은 프로필 메뉴 "내역 보기 ›"와 같은 모양(이 화면 로컬 클래스).
+## 마이페이지 (2026-11-13, 2026-11-19 간소화) — `src/app/components/mypage/`, `src/app/state/profile.ts`
+
+진입: 프로필 메뉴 "마이페이지"(`UserRound` 아이콘) → `screen = "mypage"`(뒤로 가기 있음).
+
+- **구조(2026-11-19, Canva "내 계정" 기준)**: `PageContainer` + `PageHeader`, 폭 720px 카드 하나 → 사진(변경·삭제) / 이름(수정) / 이메일(Google 로그인 배지) / 계정 삭제.
+- **2026-11-19에 뺀 것**: 직무 · 한 줄 소개 · 협업 색상 · 참여 중인 팀 · 받은 초대 · "공동 작업자에게 이렇게 보여요" 미리보기 · 설정 열기 줄 · 플랜 배지.
+  공동 작업은 각 작업물(에디터 공유)에서 하고, 설정·플랜은 프로필 메뉴에 이미 있어서다. `state/profile.ts`의 `jobTitle`·`bio`·`teams`·`invites`·`respondToInvite`는 화면에서 안 쓰지만 지우지 않았다.
+- **편집 방식(Canva 계정 설정)**: `라벨 | 값 | 수정` 한 줄 → 누르면 그 줄만 `InputField` singleline(48px) + 글자 수 + 취소/저장. Enter 저장(한글 조합 중 제외), Esc 취소. 이름 필수 20자.
+- **사진(Notion·Canva)**: "사진 변경 · 삭제". 가운데 기준 256px 정사각형 JPEG로 줄여 저장. 삭제하면 이니셜 + 협업 색상(`collabColor`, 아바타 바탕색으로 계속 씀).
+- **협업 색상**: `COLLAB_COLORS` 8색은 사람 구분용 데이터 색이라 `color` 토큰에 넣지 않았다. 고르는 화면은 지금 없다(기본 파랑).
+- **공통 적용**: 프로필 메뉴·상단 아바타의 이름·이메일·사진은 `useProfile()` — 마이페이지에서 고치면 바로 반영. 아바타는 `mypage/ProfileAvatar`.
+- **한계**: 서버 없음 — 값은 이 브라우저 localStorage(`ddalkkak.profile.v1`)에만. 계정 삭제는 토스트 안내만.
+- 새 토큰 없음.
+
+## 프로필 메뉴 (2026-11-19 정리) — `src/app/components/account/ProfileMenuButton.tsx`
+
+서비스 상단바와 에디터 공통 헤더가 같이 쓴다. 동작은 App.tsx의 `profileMenu` 객체 하나로 넘긴다.
+- 머리: 아바타 40 + 이름(구독 중이면 플랜 배지) + 이메일.
+- 크레딧 카드(`color.surface.accent` 바탕): [사용 가능 크레딧 · 내역 ›] / 잔액 20px / [크레딧 충전(primary)] [요금제(secondary)] 두 버튼(`Button` md).
+  충전 → 요금제 및 크레딧 › 추가 충전, 요금제 → 구독 탭, 내역 → 설정 › 크레딧.
+  근거: 딸깍은 쓸 때마다 줄어드는 크레딧제라 구독제(ChatGPT·Canva) 메뉴처럼 플랜 한 줄로 줄이지 않는다. 크레딧제 서비스는 잔액을 숫자로 크게 보여 주고
+  ([Gamma](https://help.gamma.app/en/articles/7834324-how-do-ai-credits-work-in-gamma): 상단 잔액·아바타 메뉴, [Leonardo](https://intercom.help/leonardo-ai/en/articles/9044700-tokens-faq): 잔액·내역,
+  [Runway](https://help.runwayml.com/hc/en-us/articles/26116703542803): 사용 내역 표, [Suno](https://help.suno.com/en/articles/2525441): 사이드바 잔액), 충전과 요금제 변경을 따로 둔다.
+  (같은 날 한 줄 "크레딧 N · 충전 ›"로 줄였다가 이 근거로 되돌렸다.) 구독·추가 크레딧 나눔과 만료일은 데이터가 "미정"이라 넣지 않았다.
+- 묶음: [마이페이지 · 설정] / [튜토리얼 다시 보기 · 문의하기 · 커뮤니티] / [로그아웃]. 줄 높이 약 40px, 글자 14px, 폭 268px. 메뉴 높이 544px → 489px.
+- 문의하기·커뮤니티·로그아웃은 실제 주소·로그인 연동 전이라 "준비 중" 토스트(`onContact`·`onCommunity`·`onLogout`만 바꾸면 된다).
 
 ## 에디터 중심 홈 시안 (2026-11-13, 브랜치 `feat/editor-centric-home`)
 
@@ -516,7 +550,7 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
   이미지 = 딸깍 포토 · 영상 = 딸깍 영상편집. 툴팁은 도구모음 카드 설명을 그대로 쓴다.
 - 아이콘: 도구모음 카드와 같은 그림. PDF·UI 디자인·영상은 `assets/home/art`(typo·appintro·shortform) 원본을 보이는 부분 기준 165px로 맞춰
   192px 정사각형으로 다시 저장했다(`assets/home/editor/{pdf,ui-design,video-edit}.png`) — 기존 아이콘과 보이는 크기를 맞추려고.
-- 동작: PDF·UI 디자인은 아직 편집기가 없어 "○○ 편집기는 준비 중이에요." 토스트만. 나머지는 기존처럼 워크스페이스를 연다 — 도구모음 편집기로의 연결은 후속.
+- 동작: PDF는 아직 편집기가 없어 "PDF 편집기는 준비 중이에요." 토스트만. UI 디자인은 2026-11-13부터 딸깍 UI 디자인 에디터를 연다(아래 절). 나머지는 기존처럼 워크스페이스를 연다 — 도구모음 편집기로의 연결은 후속.
 - 묶음 폭 = 8 × 76 + 7 × 8 = 664px. `editorEntry.groupGap`·`dividerHeight`는 쓰는 곳이 없어져 지웠다. 세로 합계 130px는 그대로.
 
 ### 홈 하단 섹션 워딩 (2026-10-16)
@@ -855,6 +889,8 @@ Hover·focus·selected·disabled 색 로직 자체는 건드리지 않았다(값
 - 이벤트는 `onboarding/track.ts` 의 `track()` 한 곳(아직 분석 도구 없음 — `ddalkkak:track` CustomEvent + 개발 모드 로그).
 
 ## AI 작업 규칙 (CLAUDE.md에서 참조)
+
+- **화면 문구에 대시 금지(2026-11-19)**: 화면 글자·툴팁·placeholder·aria-label·토스트·예시 문장에 하이픈(-)·엔 대시(–)·엠 대시(—)를 쓰지 않는다. 문장에 맞게 콜론(A: B)·괄호(A (B))·쉼표·마침표·가운데점(·)으로 바꾼다. 빈 값은 "—" 대신 "미정" 같은 낱말. 코드 주석·날짜 형식 예시 데이터는 대상 아님.
 
 - 새 화면을 만들기 전에 이 문서와 `src/app/styleTokens.ts`, `src/app/components/common/`을 먼저 확인한다.
 - 기존 토큰이 있는 값(색상/타이포그래피/라운드/그림자/버튼 높이)은 임의의 hex·px를 새로 만들지 않는다. 없는 값이면 이 문서에 먼저 추가한다.

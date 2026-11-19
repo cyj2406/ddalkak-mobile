@@ -54,6 +54,8 @@ import { SubscriptionCompletePage } from "@/app/components/pricing/SubscriptionC
 import { SettingsCreditTab } from "@/app/components/settings/SettingsCreditTab";
 import { SettingsBillingTab } from "@/app/components/settings/SettingsBillingTab";
 import { MyPage } from "@/app/components/mypage/MyPage";
+import { ProfileMenuButton } from "@/app/components/account/ProfileMenuButton";
+import { UiDesignEditor } from "@/app/components/uidesign/UiDesignEditor";
 import { ProfileAvatar } from "@/app/components/mypage/ProfileAvatar";
 import { useProfile } from "@/app/state/profile";
 
@@ -170,7 +172,7 @@ const landingAICards = [
   { title: "예비창업패키지 사업계획서" },
   { title: "럭셔리 다크 블루 랜딩페이지" },
   { title: "커뮤니티 게시글 스타일" },
-  { title: "네온 K-뷰티 포스터" },
+  { title: "네온 K뷰티 포스터" },
   { title: "크리에이티브 포트폴리오" },
 ];
 
@@ -232,7 +234,7 @@ const pptAICards = [
 ];
 
 const videoAICards = [
-  { title: "유튜브 쇼츠 – 제품 소개" },
+  { title: "유튜브 쇼츠 · 제품 소개" },
   { title: "인스타그램 릴스 광고" },
   { title: "기업 홍보 영상" },
   { title: "이벤트 하이라이트" },
@@ -1164,182 +1166,11 @@ function SidebarDrawer({ open, onClose, currentScreen, onNavigate, onSettingsOpe
   );
 }
 
-/**
- * 크레딧이 상시 눈에 띄면 사용자가 만들기 전에 비용부터 계산하게 된다 — 상단바에는
- * 알림·프로필 아바타만 두고, 잔액은 이 메뉴를 열어야 보이게 감춰 둔다.
- *
- * 메뉴 구성(이름·메일·튜토리얼·설정·커뮤니티·문의하기·로그아웃)은 사이드바 하단의
- * 계정 팝업(위 SidebarDrawer 의 profileMenuOpen 블록)과 같은 스타일을 그대로 따른다 —
- * 다른 자리에 또 다른 프로필 메뉴 모양이 생기지 않도록. 크레딧 카드만 이 메뉴에 새로 얹는다.
- */
-/** 프로필 메뉴 항목 공통 클래스 — hover 배경 + 키보드 focus 링(이 버튼들엔 지금까지 둘 다 없었다). */
-const PROFILE_MENU_ROW_CLASS = "w-full flex items-center gap-3.5 px-5 py-3.5 outline-none transition-colors duration-150 hover:bg-[#f8fafc] focus-visible:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]";
+// 프로필 메뉴는 components/account/ProfileMenuButton.tsx (에디터 공통 헤더와 같이 쓴다).
 
-function ProfileMenuButton({ onCreditClick, onHistoryClick, onStartTutorial, onSettingsOpen, onMyPageClick }: {
-  onCreditClick?: () => void;
-  /** 마이페이지(프로필·공동 작업·계정) — 2026-11-13 */
-  onMyPageClick?: () => void;
-  /** 잔액 옆 "내역 보기 ›" — 설정 > 크레딧·사용 내역을 바로 연다. */
-  onHistoryClick?: () => void;
-  onStartTutorial?: () => void;
-  onSettingsOpen?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [creditBalance] = useCreditBalance();
-  // 이름·이메일·아바타는 마이페이지에서 고친 값을 그대로 따른다(state/profile.ts).
-  const profile = useProfile();
-  // 이름 옆 플랜 배지 — 실제 구독 스토어 상태를 그대로 표시한다(조회 전에는 아무
-  // 배지도 달지 않고, 해지 예정이어도 이용 기간이 남아 있으면 그 플랜을 그대로 보여준다 —
-  // hasCurrentPlan이 "active"/"cancel_scheduled" 둘 다 포함하는 이유).
-  const subscription = useSubscription();
-  const currentPlan = findPlan(subscription.planId);
-  const hasCurrentPlan = subscription.status === "active" || subscription.status === "cancel_scheduled";
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(menuRef, open);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const menuTop = [
-    { icon: <UserRound size={19} strokeWidth={1.6} color="#9ca3af" />, label: "마이페이지", onClick: onMyPageClick ? () => { setOpen(false); onMyPageClick(); } : undefined },
-    { icon: <HelpCircle size={19} strokeWidth={1.6} color="#9ca3af" />, label: "튜토리얼 다시 보기", onClick: onStartTutorial ? () => { setOpen(false); onStartTutorial(); } : undefined },
-    { icon: <SettingsIcon size={19} strokeWidth={1.6} color="#9ca3af" />, label: "설정", onClick: onSettingsOpen ? () => { setOpen(false); onSettingsOpen(); } : undefined },
-  ];
-  const menuMid = [
-    { icon: <Users size={19} strokeWidth={1.6} color="#9ca3af" />, label: "커뮤니티" },
-    { icon: <Mail size={19} strokeWidth={1.6} color="#9ca3af" />, label: "문의하기" },
-  ];
-
-  return (
-    <div ref={wrapRef} style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`${profile.name} 계정 메뉴`}
-        title={profile.name}
-        // 터치 영역 44×44(투명), 보이는 아바타는 32px — 크기를 키우지 않고 누르기 쉬운 영역만 넓힌다.
-        className="group size-11 flex items-center justify-center rounded-full shrink-0 outline-none"
-        style={{ background: "transparent" }}
-      >
-        <span className="block rounded-full overflow-hidden border border-[#c7d2fe] transition-shadow duration-150 group-hover:ring-2 group-hover:ring-offset-1 group-hover:ring-[#c7d2fe] group-focus-visible:ring-2 group-focus-visible:ring-offset-1 group-focus-visible:ring-[#4f7bff]" style={{ width: 32, height: 32 }}>
-          <ProfileAvatar profile={profile} size={30} />
-        </span>
-      </button>
-      {open && (
-        <div
-          ref={menuRef}
-          role="menu"
-          aria-label="프로필"
-          className="profile-menu-pop absolute right-0 rounded-[20px] bg-white overflow-hidden"
-          style={{ top: 42, width: 280, border: "1px solid #e2e8f0", boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", zIndex: 60 }}
-        >
-          <div className="px-5 pt-5 pb-4">
-            <div className="flex items-center gap-2">
-              <p style={{ ...f, fontWeight: 700, fontSize: 17, color: "#0a0a0a", letterSpacing: "-0.5px" }} className="truncate">{profile.name}</p>
-              {/* 조회 전(아직 스토어를 안 읽었다는 뜻은 아니지만, 구독 여부를 확정하기
-                  전까지는)에는 배지를 달지 않는다 — Free를 임의로 못 박지 않는다. */}
-              {hasCurrentPlan && currentPlan && (
-                <span
-                  className="rounded-full px-2 py-0.5 shrink-0"
-                  style={{ ...f, fontWeight: 700, fontSize: 10.5, letterSpacing: "-0.1px", color: color.brand, background: color.surface.accent }}
-                >
-                  {currentPlan.name}
-                </span>
-              )}
-            </div>
-            <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{profile.email}</p>
-          </div>
-          {/* 크레딧 영역 — 프로필/크레딧/일반 메뉴 세 영역을 구분선이 아니라 여백과 배경
-              차이로 그룹핑한다. 카드 배경은 브랜드 톤을 아주 옅게 쓰는 surface.accent,
-              테두리·그림자 없이 radius.card만 적용 — 강조는 배경색 하나로 충분하다.
-              내역 보기와 구매 버튼은 잔액 영역과 서로 독립된 클릭 요소다(영역 전체를
-              감싸는 버튼 아님). */}
-          <div className="px-5 pb-4">
-            <div
-              className="flex flex-col gap-3"
-              style={{ background: color.surface.accent, borderRadius: radius.card, padding: "14px 16px" }}
-            >
-              <div className="flex flex-col gap-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span style={typography.caption}>사용 가능 크레딧</span>
-                  {onHistoryClick && (
-                    <button
-                      type="button"
-                      onClick={() => { setOpen(false); onHistoryClick(); }}
-                      className="shrink-0 -my-1 -mr-1.5 px-1.5 py-1 rounded-md outline-none transition-colors hover:bg-black/[0.06] focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[#4f7bff]"
-                      style={{ ...f, fontWeight: 600, fontSize: 12, color: color.brand, letterSpacing: "-0.2px" }}
-                    >
-                      내역 보기 ›
-                    </button>
-                  )}
-                </div>
-                <span
-                  className="truncate"
-                  style={{ ...f, fontWeight: 700, fontSize: 20, color: color.text.primary, letterSpacing: "-0.4px" }}
-                >
-                  {creditBalance.toLocaleString()}
-                </span>
-              </div>
-              <Button
-                variant="secondary"
-                size="md"
-                fullWidth
-                style={{ whiteSpace: "nowrap" }}
-                onClick={() => { setOpen(false); onCreditClick?.(); }}
-              >
-                요금제 및 크레딧
-              </Button>
-            </div>
-          </div>
-          {menuTop.map(({ icon, label, onClick }) => (
-            <button key={label} onClick={onClick} className={PROFILE_MENU_ROW_CLASS}>
-              <div className="shrink-0">{icon}</div>
-              <span style={{ ...f, fontWeight: 500, fontSize: 14.5, color: "#1e293b", letterSpacing: "-0.3px" }}>{label}</span>
-            </button>
-          ))}
-          <div className="h-px bg-[#f1f5f9]" />
-          {menuMid.map(({ icon, label }) => (
-            <button key={label} className={PROFILE_MENU_ROW_CLASS}>
-              <div className="shrink-0">{icon}</div>
-              <span style={{ ...f, fontWeight: 500, fontSize: 14.5, color: "#1e293b", letterSpacing: "-0.3px" }}>{label}</span>
-            </button>
-          ))}
-          <div className="h-px bg-[#f1f5f9]" />
-          <button className={`${PROFILE_MENU_ROW_CLASS} pb-5`}>
-            <LogOut size={19} strokeWidth={1.6} color="#9ca3af" />
-            <span style={{ ...f, fontWeight: 500, fontSize: 14.5, color: "#1e293b", letterSpacing: "-0.3px" }}>로그아웃</span>
-          </button>
-        </div>
-      )}
-      <style>{`
-        @keyframes profileMenuIn {
-          from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .profile-menu-pop { animation: profileMenuIn 160ms cubic-bezier(0.4, 0, 0.2, 1); transform-origin: top right; }
-        @media (prefers-reduced-motion: reduce) { .profile-menu-pop { animation: none; } }
-      `}</style>
-    </div>
-  );
-}
-
-function TopBar({ onMenuOpen, onBack, showBack, onCreditClick, onHistoryClick, onBellClick, bellRef, brand = true, onStartTutorial, onSettingsOpen, onMyPageClick }: {
+function TopBar({ onMenuOpen, onBack, showBack, onBellClick, bellRef, brand = true, profileMenu }: {
   onMenuOpen: () => void; onBack?: () => void; showBack?: boolean;
-  onCreditClick?: () => void; onHistoryClick?: () => void; onBellClick?: () => void;
+  onBellClick?: () => void;
   bellRef?: React.RefObject<HTMLButtonElement | null>;
   /**
    * 좌측의 햄버거 + 로고를 그릴지. 사이드바가 도킹된 데스크톱에서는 false —
@@ -1347,9 +1178,8 @@ function TopBar({ onMenuOpen, onBack, showBack, onCreditClick, onHistoryClick, o
    * 뒤로가기는 화면 맥락이라 brand 와 무관하게 showBack 이 정한다.
    */
   brand?: boolean;
-  onStartTutorial?: () => void;
-  onSettingsOpen?: () => void;
-  onMyPageClick?: () => void;
+  /** 프로필 메뉴 동작(에디터 공통 헤더와 같은 것) */
+  profileMenu: React.ComponentProps<typeof ProfileMenuButton>;
 }) {
   return (
     // 상단바 규격(2026-10-02) — 높이 56px(기존 레이아웃이 calc(100vh - 56px) 등으로 의존해 유지,
@@ -1370,7 +1200,7 @@ function TopBar({ onMenuOpen, onBack, showBack, onCreditClick, onHistoryClick, o
           <IconBell size={22} />
           <div aria-hidden className="absolute top-[9px] left-[25px] bg-[#2b7fff] rounded-full size-2 ring-2 ring-[#f8fafc]" />
         </IconButton>
-        <ProfileMenuButton onCreditClick={onCreditClick} onHistoryClick={onHistoryClick} onStartTutorial={onStartTutorial} onSettingsOpen={onSettingsOpen} onMyPageClick={onMyPageClick} />
+        <ProfileMenuButton {...profileMenu} />
       </div>
     </header>
   );
@@ -3144,7 +2974,7 @@ function WsForm({ category }: { category: WorkspaceCategory }) {
         <label style={{ ...f, fontWeight: 600, fontSize: 13, color: "#374151" }}>주제 / 서비스 소개</label>
         <textarea className="w-full rounded-[12px] border border-[#e2e8f0] bg-white px-3.5 py-3 resize-none outline-none"
           style={{ ...f, fontSize: 13, minHeight: 80, lineHeight: 1.6 }}
-          placeholder="예: 딸깍.net — AI 문서 자동생성 서비스, 누구나 쉽게 전문 문서를 만들 수 있습니다." />
+          placeholder="예: 딸깍.net, AI 문서 자동생성 서비스. 누구나 쉽게 전문 문서를 만들 수 있습니다." />
       </div>
       <div className="flex flex-col gap-1.5">
         <label style={{ ...f, fontWeight: 600, fontSize: 13, color: "#374151" }}>스타일 톤 <span style={{ color: "#9ca3af", fontWeight: 400 }}>(선택)</span></label>
@@ -4161,7 +3991,7 @@ function VideoFormCard({ onGenerate }: { onGenerate: () => void }) {
           {/* 장면 1 필드들 */}
           <div className="flex flex-col gap-4 rounded-[14px] p-4" style={{ border:"1px solid #EEF0F3", background:"#FBFCFD" }}>
             <div className="flex flex-col gap-[10px]">
-              <FcLabel label="장면 설명 — 무엇이 어떻게 움직이는지" />
+              <FcLabel label="장면 설명 (무엇이 어떻게 움직이는지)" />
               <FcTextarea value="" onChange={()=>{}} placeholder="예) 창문을 점검하는 사람, 차분한 긴장감" />
             </div>
             <div className="flex flex-col gap-[10px]">
@@ -4173,7 +4003,7 @@ function VideoFormCard({ onGenerate }: { onGenerate: () => void }) {
               <span style={{ ...f, fontSize:14, fontWeight:700, color:"#3B5BFE" }}>5초</span>
             </div>
             <div className="flex flex-col gap-[10px]">
-              <FcLabel label="키워드 — 분위기·디테일" />
+              <FcLabel label="키워드 (분위기·디테일)" />
               <FcInput value="" onChange={()=>{}} placeholder="예) 태풍 대비, 창문 잠금, 차분한 긴장감" />
             </div>
           </div>
@@ -4224,7 +4054,7 @@ function LandingFormCard({ onGenerate }: { onGenerate: () => void }) {
             <FcLabel label="주제 / 제품 소개" />
             <FcToggleRow autoOn={s.autoPrompt} onToggleAuto={() => set("autoPrompt",!s.autoPrompt)} origOn={s.origOn} onToggleOriginal={() => set("origOn",!s.origOn)} />
           </div>
-          <FcTextarea value={s.intro} onChange={v=>set("intro",v)} placeholder="예) 딸깍.net — AI 문서 자동생성 서비스. 누구나 쉽게 전문 문서를 만들 수 있습니다." />
+          <FcTextarea value={s.intro} onChange={v=>set("intro",v)} placeholder="예) 딸깍.net, AI 문서 자동생성 서비스. 누구나 쉽게 전문 문서를 만들 수 있습니다." />
         </div>
         {/* 2·3. 스타일 힌트 + 섹션 수 — 합쳐서 100% (오른쪽 끝이 위 textarea와 일치) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4536,7 +4366,7 @@ const RESULT_CONFIG: Record<WorkspaceCategory, {
   docs: {
     intro: "표준 서식과 필수 조항을 반영하여 바로 사용할 수 있는 문서를 작성하였습니다.",
     summary: (t) => [
-      ["편집용 문서", `${FILE_TYPE_META[t].label} — .${FILE_TYPE_META[t].ext} 형식으로 편집 가능`],
+      ["편집용 문서", `${FILE_TYPE_META[t].label}(.${FILE_TYPE_META[t].ext}) 형식으로 편집 가능`],
       ["서식", "표준 계약 서식 및 조항 자동 반영"],
     ],
     credit: 48,
@@ -5416,12 +5246,15 @@ export default function App() {
   const openSearch = (query: string) => { setSearchQuery(query); navigate("search"); };
   /** 레이어 분리 — 홈 아이콘 줄에서 바로 여는 이미지 미니 에디터(텍스트 분리 패널 포함). 워크스페이스를 거치지 않는다. */
   const [layerEditorOpen, setLayerEditorOpen] = useState(false);
+  // 딸깍 UI 디자인 에디터(2026-11-13) — 워크스페이스처럼 본문 컬럼을 덮는다. docs/ui-design-editor.md
+  const [uiDesignOpen, setUiDesignOpen] = useState(false);
   /** 홈 아이콘 줄 → 포맷 에디터(빈 템플릿 워크스페이스). 레이어 분리만 이미지 미니 에디터를 바로 연다. */
   const [homeVariant] = useHomeVariant();
   const openEditor = (kind: EditorKind) => {
     if (kind === "layer") { setLayerEditorOpen(true); return; }
     // 도구모음 편집기와 하나씩 연결하기 전까지 새 항목은 안내만(2026-11-13)
-    if (kind === "pdf" || kind === "uidesign") { showToast(`${kind === "pdf" ? "PDF" : "UI 디자인"} 편집기는 준비 중이에요.`); return; }
+    if (kind === "uidesign") { setUiDesignOpen(true); return; }
+    if (kind === "pdf") { showToast("PDF 편집기는 준비 중이에요."); return; }
     const target: Record<Exclude<EditorKind, "layer" | "pdf" | "uidesign">, [WorkspaceCategory, string]> = {
       image: ["image", "전체"], word: ["docs", "워드"], hangul: ["docs", "한글"],
       excel: ["docs", "엑셀"], ppt: ["ppt", "전체"], video: ["video", "영상"],
@@ -5462,6 +5295,7 @@ export default function App() {
   const navigate = (s: Screen) => {
     setScreenHistory((h) => (screen === s ? h : [...h, screen]));
     setWorkspace(null);
+    setUiDesignOpen(false);
     setScreen(s);
   };
 
@@ -5519,7 +5353,7 @@ export default function App() {
    * "들어갈 때/나올 때" 한 번씩만 건드리므로, 그 사이에 사용자가 직접 펴거나 접은
    * 선택은 그대로 남는다.
    */
-  const inWorkspace = !!workspace;
+  const inWorkspace = !!workspace || uiDesignOpen;
   useEffect(() => { setSidebarCollapsed(inWorkspace); }, [inWorkspace]);
 
   const isSubScreen = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai", "notifications-all", "search", "templates", "cardnews-editor", "request-help", "pricing", "subscription-complete", "mypage"].includes(screen);
@@ -5530,8 +5364,23 @@ export default function App() {
     setDrawerOpen(false);
     setSettingsOpen(false);
     setWorkspace(null);
+    setUiDesignOpen(false);
     setScreen("home");
     setOnboardingReplay((n) => n + 1);
+  };
+
+  /** 프로필 메뉴 동작: 서비스 상단바와 에디터 공통 헤더가 같이 쓴다. 다른 화면으로 가는 항목은 에디터를 닫고 간다.
+   *  문의하기·커뮤니티·로그아웃은 실제 주소·로그인 연동 전이라 안내만(2026-11-19). */
+  const profileMenu: React.ComponentProps<typeof ProfileMenuButton> = {
+    onCreditClick: () => { setUiDesignOpen(false); openPricing("subscription"); },
+    onTopUpClick: () => { setUiDesignOpen(false); openPricing("topup"); },
+    onHistoryClick: () => openSettingsAt("크레딧"),
+    onMyPageClick: () => { setUiDesignOpen(false); navigate("mypage"); },
+    onSettingsOpen: () => openSettingsAt("화면 설정"),
+    onStartTutorial: startTutorial,
+    onContact: () => showToast("문의하기는 준비 중이에요."),
+    onCommunity: () => showToast("커뮤니티는 준비 중이에요."),
+    onLogout: () => showToast("로그아웃은 준비 중이에요."),
   };
 
   return (
@@ -5539,7 +5388,8 @@ export default function App() {
        오버레이 드로어라 자리를 차지하지 않고, 본문 컬럼 혼자 폭을 전부 쓴다. */
     <div className="bg-[#f8fafc] h-[100dvh] w-full flex overflow-hidden" style={f}>
       <ToastHost />
-      <SidebarDrawer
+      {/* UI 디자인 에디터는 집중 모드 — 서비스 사이드바를 숨긴다(나가기는 에디터 상단 ‹). docs/ui-design-editor.md "1-3" */}
+      {!uiDesignOpen && <SidebarDrawer
         variant={isDesktop ? "docked" : "drawer"}
         open={isDesktop || drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -5549,7 +5399,7 @@ export default function App() {
         onNavigate={navigate}
         onSettingsOpen={() => openSettingsAt("화면 설정")}
         onStartTutorial={startTutorial}
-      />
+      />}
       {/* 본문 컬럼 — 워크스페이스가 이 안에서 absolute 로 덮으므로 relative 가 필요하다 */}
       <div className="flex-1 min-w-0 relative flex flex-col overflow-hidden">
       <TopBar
@@ -5557,13 +5407,9 @@ export default function App() {
         onBack={goBack}
         showBack={isSubScreen}
         brand={!isDesktop}
-        onCreditClick={() => openPricing("subscription")}
-        onHistoryClick={() => openSettingsAt("크레딧")}
         onBellClick={() => setNotifOpen((v) => !v)}
         bellRef={bellRef}
-        onStartTutorial={startTutorial}
-        onSettingsOpen={() => openSettingsAt("화면 설정")}
-        onMyPageClick={() => navigate("mypage")}
+        profileMenu={profileMenu}
       />
       {/* 홈 시안 전환(검토용) — current 는 기존 홈 그대로. docs/home-editor-redesign.md */}
       {screen === "home" && homeVariant === "a" && (
@@ -5700,7 +5546,7 @@ export default function App() {
           결제 실패 알림·"구독 및 결제 관리"는 구독·결제 탭, "다시 구독하기"/"크레딧
           충전"은 구매 화면으로 바로 연다), pricingNavKey를 key로 넘겨 이미 이 화면에
           머무는 중에 다시 openPricing()을 불러도 매번 그 탭/화면으로 확실히 연다. */}
-      {screen === "mypage" && <MyPage onOpenSettings={() => openSettingsAt("화면 설정")} />}
+      {screen === "mypage" && <MyPage />}
       {screen === "pricing" && (
         <PricingPage
           key={pricingNavKey}
@@ -5725,6 +5571,21 @@ export default function App() {
       )}
       {/* 워크스페이스 — 본문 컬럼만 덮는다(사이드바는 옆에 그대로 남는다).
           TopBar 까지 덮는 것은 지금과 같다. */}
+      {uiDesignOpen && (
+        <UiDesignEditor
+          onBack={() => setUiDesignOpen(false)}
+          onBellClick={() => setNotifOpen(true)}
+          profileMenu={profileMenu}
+          onSwitchApp={(appId) => {
+            // 공통 헤더 앱 이름 ▾ — 이 프로젝트에 있는 편집기로 연결, 없는 도구는 안내
+            const kinds: Record<string, EditorKind> = { word: "word", hangul: "hangul", excel: "excel", ppt: "ppt", image: "image", video: "video" };
+            const k = kinds[appId];
+            if (!k) { showToast("이 도구는 아직 이 화면에서 열 수 없어요(준비 중)."); return; }
+            setUiDesignOpen(false);
+            openEditor(k);
+          }}
+        />
+      )}
       {workspace && (
         <WorkspaceScreen
           category={workspace.category}
@@ -5742,8 +5603,8 @@ export default function App() {
       ) : (
         <NotificationsPanel onClose={() => setNotifOpen(false)} onViewAll={() => { setNotifOpen(false); navigate("notifications-all"); }} />
       ))}
-      {screen === "home" && !workspace && <HomeVariantSwitcher />}
-      <HomeOnboarding enabled={screen === "home" && homeVariant === "current" && !workspace && !settingsOpen} isDesktop={isDesktop} replayToken={onboardingReplay} />
+      {screen === "home" && !workspace && !uiDesignOpen && <HomeVariantSwitcher />}
+      <HomeOnboarding enabled={screen === "home" && homeVariant === "current" && !workspace && !uiDesignOpen && !settingsOpen} isDesktop={isDesktop} replayToken={onboardingReplay} />
       {settingsOpen && (
         <SettingsModal
           key={settingsNavKey}
