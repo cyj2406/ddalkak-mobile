@@ -503,6 +503,14 @@ ESC 닫기)을 뽑아냈다. `PurchaseConfirmDialog`와 `CancelSubscriptionDialo
 - 이용 현황은 실제 스토어(구독·크레딧·aiModels)를 읽는다. 로그인 방법은 지금 예시로 Google 고정(실제로는 로그인 세션의 공급자).
 - 협업 색상 `COLLAB_COLORS`는 사진이 없을 때 아바타 바탕색으로만 쓴다. 새 토큰 없음.
 
+## 아이콘 · 입력칸 점검 (2026-11-20)
+
+- **아이콘은 lucide 하나만**: 편집기(editor-shell · doceditor · uidesign) · 홈 B안 · 마이페이지 · 설정을 점검했다. 손으로 그린 svg는 편집기 상단 알림 종 하나뿐이라 lucide `Bell`로 바꿨다(점 색도 `color.brand`). 캔버스 커서 · 그리기용 svg는 아이콘이 아니라 그대로.
+- 남은 예외(이번 범위 밖): `App.tsx`의 서비스 기본 아이콘(IconHome · IconWork · IconStar · IconMenu · IconBell 등 84개)은 dev 디자인에서 내보낸 svg다. 모양은 lucide와 거의 같고 선 굵기 1.67로 맞아 있어 지금은 두었다. 바꾸면 지금 홈(A)의 모양이 미세하게 달라진다.
+- **안에 든 입력칸은 `field-inline`, 감싸는 둥근 칸은 `field-pill`**: 전역 포커스 규칙이 input · textarea뿐 아니라 **select에도** 각진 파란 상자를 그려서(공유 창 "편집 가능") select도 `field-inline`을 받게 theme.css를 고쳤다. 감싼 칸 안의 select는 `appearance-none` + lucide `ChevronDown`, 앞에 세로 구분선.
+- 공유 창: 입력 · 권한 · [초대] 높이를 공통 40px로, 글자 14px. UI 디자인 속성 패널 굵기 select도 기본 화살표 대신 lucide `ChevronDown`.
+- 오류 글자는 `#dc2626`(흰 바탕 4.8:1). `#ef4444`는 테두리에만(글자로 쓰면 대비 부족).
+
 ## 화면 문구 규칙 (2026-11-20, 토스 문구 방식) — `src/app/copy.ts`
 
 사용자 "을(를) 같은 거 필요 없잖아, 전체적으로 토스처럼, 이런 점(·)도 보기 안 좋다".
@@ -958,6 +966,8 @@ Hover·focus·selected·disabled 색 로직 자체는 건드리지 않았다(값
 
 ## 홈 첫 방문 온보딩 (2026-10-30)
 
+> 2026-11-20부터 지금 홈과 B안 모두 **시작 튜토리얼**(홈 → 한글 편집기 → 템플릿 → 딸깍 AI, 3단계)을 쓴다: [docs/starter-tour.md](starter-tour.md). 아래 예전 홈 온보딩은 더 띄우지 않는다(기록용).
+
 - 코드는 `src/app/components/onboarding/` 한 폴더. 단계 데이터(대상·문구·스크롤·말풍선 위치·모바일 덮어쓰기)는 `onboardingSteps.ts` 에서만 고친다.
 - 대상은 클래스가 아니라 `data-onboarding` 속성으로 잡는다: `search`·`search-input`(HomeSearch) · `editor-row`(EditorQuickLinks) · `task-grid-title`(TaskGrid).
 - **3단계, 페이지 순서대로 위→아래 한 방향**: 검색창 → 편집기 바로 열기 줄(고치기, 2026-11-13 제목 "편집기를 바로 써 보세요"로 변경) → 작업별로 시작하기. 인기 템플릿·요청 도우미·내 작업은 단계에 넣지 않는다
@@ -980,3 +990,21 @@ Hover·focus·selected·disabled 색 로직 자체는 건드리지 않았다(값
 - 기존 토큰이 있는 값(색상/타이포그래피/라운드/그림자/버튼 높이)은 임의의 hex·px를 새로 만들지 않는다. 없는 값이면 이 문서에 먼저 추가한다.
 - `Button`/`Tabs`/`ScrollableChips` 등 공통 컴포넌트를 변경할 때는 실제 사용처(`grep`으로 import 위치 확인)에 미치는 영향을 먼저 살펴본다.
 - 새로운 기준(토큰, 컴포넌트, 규칙)을 추가하면 이 문서도 함께 갱신한다.
+
+## 내 작업 화면 정리 (2026-11-20) — `src/app/components/mywork/MyWorkScreen.tsx`
+
+- 사용자 "보기 어렵다, 필터도 어떻게 할지 모르겠다". Google Drive 목록 보기 · Canva 프로젝트 참고.
+- **편집기 파일 + AI 대화를 한 목록에**(사이드바 "최근"의 전체 버전). 예전엔 대화만 있었다.
+- 검색(field-pill) + 정렬 select(최근 수정순 · 이름순, lucide ChevronDown) → **종류 칩 한 줄**(공통 `ScrollableChips` solid): 전체 · 문서(한글 · 워드) · 시트 · 발표 · PDF · 디자인(UI 디자인 · 이미지) · 영상 · 대화. 예전 필터 드롭다운(이미지 · 랜딩페이지 · 동영상 · 프레젠테이션 · 오디오 · 문서, AI 결과물 종류)은 뺐다.
+- 목록: 열 머리 [이름 | 종류 | 마지막 수정] + 줄(종류 선 아이콘 32px 칸 + 이름 14/500 | 종류 13 회색 | "방금 · n시간 전 · 어제 · 7월 22일" 13 회색 | 마우스를 올리면 📌). 색깔 뱃지는 뺐다. 640px 미만에서는 종류 열을 숨긴다.
+- 고정은 사이드바와 같은 목록(`ddalkkak.sidebarPins`, 최대 5), 고정한 것이 맨 위에 📌. 바꾸면 사이드바도 바로 따라간다(`ddk-pins-changed` 이벤트).
+- 파일 줄을 누르면 그 편집기로 연다. 대화 줄은 예시 데이터라 지금은 열지 않는다. 예전 `MyWorkScreen`(App.tsx)은 남아 있으나 쓰지 않는다.
+
+## 떠 있는 메뉴 위치 (2026-11-20)
+
+사용자 "사이드바 맨 아래 줄 ⋯ 메뉴가 잘린다". 스크롤되거나 overflow가 걸린 영역(사이드바, 패널) 안에서 여는 ⋯ 메뉴는 그 영역 안에 두지 않고 화면 위(`createPortal` + `position: fixed`)에 띄운다. ChatGPT, Claude, Notion 사이드바와 같은 규칙:
+
+- 기본: 누른 ⋯ 바로 아래 4px, 왼쪽 끝을 ⋯에 맞춘다. 사이드바 밖 본문 위로 넘쳐도 된다.
+- 아래 자리가 모자라면 ⋯ 위로 뒤집는다. 화면 끝에서 8px 안쪽을 지킨다.
+- 바깥을 누르거나 Esc를 누르면 닫는다. 스크롤과 창 크기 변경에 따라 위치를 다시 잡는다.
+- 적용: `App.tsx` `SideRow`(사이드바 최근 · 고정 줄).

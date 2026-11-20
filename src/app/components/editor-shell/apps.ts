@@ -26,3 +26,13 @@ export const EDITOR_APPS: EditorApp[] = [
   { id: "image", label: "이미지", hint: "레이어 사진 편집", art: artImage }, // 딸깍 포토(레이어 분리 포함)
   { id: "video", label: "영상", hint: "간단한 영상 편집", art: artVideo }, // 딸깍 영상편집
 ];
+
+/**
+ * 새로 만들기 메뉴 묶음(2026-11-20, 사용자 "더 추가될 수도 있는데 격자는 비효율적"). Google Drive "새로 만들기"처럼 종류별 한 줄 목록.
+ * 편집기가 늘면 맞는 묶음에 id만 넣는다. 10개를 넘으면 메뉴 맨 위에 검색 칸을 붙인다(docs/home-plan-b.md).
+ */
+export const EDITOR_GROUPS: { label: string; ids: EditorAppId[] }[] = [
+  { label: "문서", ids: ["hangul", "word", "pdf"] },
+  { label: "표 · 발표", ids: ["excel", "ppt"] },
+  { label: "디자인 · 미디어", ids: ["uidesign", "image", "video"] },
+];

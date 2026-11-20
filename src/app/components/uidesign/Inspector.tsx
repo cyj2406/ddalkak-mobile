@@ -196,15 +196,19 @@ export function Inspector({ page, node, zoom, onZoom, onNode, onPageBg, mode, on
                 <div className="flex flex-col gap-1.5">
                   <div className="rounded-md px-2 h-7 flex items-center bg-[#f5f5f5]" style={{ fontSize: editorType.caption, color: "#111827" }}>Pretendard</div>
                   <div className="grid grid-cols-2 gap-1.5">
-                    <select
-                      value={node.fontWeight}
-                      onChange={(e) => onNode({ fontWeight: Number(e.target.value) })}
-                      className="rounded-md px-1.5 h-7 bg-[#f5f5f5] outline-none"
-                      style={{ ...f, fontSize: editorType.caption, color: "#111827" }}
-                      aria-label="굵기"
-                    >
-                      {WEIGHTS.map(([w, l]) => <option key={w} value={w}>{l}</option>)}
-                    </select>
+                    <label className="relative flex items-center">
+                      {/* 2026-11-20 점검: 기본 화살표가 칸마다 달라 보여 숨기고 lucide ChevronDown */}
+                      <select
+                        value={node.fontWeight}
+                        onChange={(e) => onNode({ fontWeight: Number(e.target.value) })}
+                        className="w-full rounded-md pl-1.5 pr-6 h-7 bg-[#f5f5f5] outline-none appearance-none cursor-pointer"
+                        style={{ ...f, fontSize: editorType.caption, color: "#111827" }}
+                        aria-label="굵기"
+                      >
+                        {WEIGHTS.map(([w, l]) => <option key={w} value={w}>{l}</option>)}
+                      </select>
+                      <ChevronDown size={12} color="#6b7280" className="absolute right-1.5 pointer-events-none" />
+                    </label>
                     <NumField label="" value={node.fontSize ?? 16} min={1} onCommit={(v) => onNode({ fontSize: v })} />
                   </div>
                   <div className="flex gap-1">

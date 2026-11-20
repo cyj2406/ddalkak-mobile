@@ -117,7 +117,7 @@ function ProviderCard({ pid }: { pid: ProviderId }) {
             <Button variant="primary" size="md" type="submit">연결</Button>
             <Button variant="secondary" size="md" type="button" onClick={() => { setEditing(false); setKey(""); setError(null); }}>취소</Button>
           </div>
-          <p style={{ fontSize: 12, marginTop: 6, color: error ? "#ef4444" : color.text.muted }}>
+          <p style={{ fontSize: 12, marginTop: 6, color: error ? "#dc2626" : color.text.secondary }}>
             {error ?? <>키는 {p.name} 콘솔에서 만들 수 있어요. <a href={p.keyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline" style={{ color: color.brand }}>키 만들기<ExternalLink size={11} /></a></>}
           </p>
         </form>

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { color } from "@/app/styleTokens";
 
 /**
  * 패널 너비 조절(에디터 공통, 2026-11-19) — 템플릿·딸깍 AI·코멘트·버전 기록 패널의 안쪽 가장자리를 끌어 너비를 바꾼다.
@@ -56,7 +57,7 @@ export function PanelResizeHandle({ side, panel, label }: { side: "left" | "righ
       className="absolute top-0 bottom-0 z-20 outline-none group"
       style={{ [side]: 0, width: 6, cursor: "col-resize" }}
     >
-      <span className="absolute top-0 bottom-0 group-focus-visible:bg-[#4f7bff]" style={{ [side]: 0, width: 2, background: on ? "#4f7bff" : "transparent", transition: "background 120ms" }} />
+      <span className="absolute top-0 bottom-0 group-focus-visible:bg-[#4f7bff]" style={{ [side]: 0, width: 2, background: on ? color.brand : "transparent", transition: "background 120ms" }} />
     </div>
   );
 }

@@ -375,6 +375,7 @@ export function Canvas(p: Props) {
   const [pinDrag, setPinDrag] = useState<{ id: string; x: number; y: number } | null>(null);
   const pressPin = (e: React.PointerEvent, t: Thread) => {
     if (e.button !== undefined && e.button !== 0) return;
+    if (e.clientX !== undefined) e.preventDefault(); // 글자 선택·이미지 끌기가 시작되면 옮기기가 끊긴다
     const mine = t.messages[0]?.author.name === p.me.name;
     const start = threadPos(t);
     let warned = false;

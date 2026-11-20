@@ -102,7 +102,7 @@ export function DocCommentLayer({ threads, setThreads, me, members, anchorLabel 
       const before = threads;
       setThreads((all) => all.filter((x) => x.id !== t.id));
       setOpenThreadId(null);
-      showToast("스레드를 삭제했어요.", "success", { label: "되돌리기", onClick: () => restore(before) });
+      showToast("코멘트를 삭제했어요.", "success", { label: "되돌리기", onClick: () => restore(before) });
     },
     onEditMsg: (msgId, text) => patch(t.id, (x) => ({ ...x, messages: x.messages.map((m) => (m.id === msgId ? { ...m, text, editedAt: Date.now() } : m)) })),
     onDeleteMsg: (msgId) => {

@@ -21,9 +21,9 @@ import { josa } from "@/app/copy";
 
 const GUIDE_KEY = "ddalkkak.uidesign.guideDismissed";
 const GUIDE = [
-  ["프레임 그리기", "F", "프레임 도구를 고른 뒤 캔버스에서 드래그하거나 기기 크기를 고르세요."],
+  ["화면 만들기", "F", "아래 도구 모음에서 화면을 고른 뒤 캔버스를 누르거나 끌어서 만들어요."],
   ["딸깍 AI에게 시키기", "", "오른쪽 딸깍 AI에 원하는 화면을 말로 적으면 캔버스에 바로 그려요."],
-  ["코멘트 남기기", COMMENT_SHORTCUT, "캔버스를 클릭해 의견을 남기고, 핀을 끌어 옮길 수 있어요."],
+  ["코멘트 남기기", COMMENT_SHORTCUT, "위쪽 💬를 누르고 캔버스를 클릭해 의견을 남겨요. 핀은 끌어서 옮길 수 있어요."],
 ] as const;
 const NEUTRAL_ICON = { background: "#f1f5f9", color: "#334155" } as const;
 /** 내 파일·템플릿 격자가 같은 열 너비를 쓴다 — 위아래 카드 정렬선이 하나로 떨어지게 */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { ChevronDown, ChevronRight, Circle, StickyNote, Timer, Spline, Vote, Code2, Frame, Hand, Hash, HelpCircle, Image as ImageIcon, Menu, MessageCircle, Minus, MousePointer2, MoveUpRight, PanelLeft, Pencil, PenTool, Plus, Scaling, Search, Slice, Square, SquareDashed, Star, Triangle, Type, Workflow, Zap, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronRight, Circle, StickyNote, Timer, Spline, Vote, Frame, Hand, Hash, HelpCircle, Image as ImageIcon, Menu, Minus, MousePointer2, MoveUpRight, PanelLeft, Pencil, Plus, Search, Square, SquareDashed, Type, type LucideIcon } from "lucide-react";
 
 import { showToast } from "@/app/components/common/Toast";
 import type { AiAttachment, AiRequest, AiResult } from "@/app/components/editor-shell/AiAssistantPanel";
@@ -52,7 +52,7 @@ const LEFT_KEY = "ddalkkak.uidesign.leftPanel";
 const profileEmail = getProfile().email;
 
 export function DesignFile({
-  initialDoc, active, me, threads, setThreads, pinsHidden, togglePins, onCommentMode, registerApi, onSelection, onDocChange, shell, kind = "design",
+  initialDoc, active, me, threads, setThreads, pinsHidden, togglePins, onCommentMode, onExitCommentMode, commentPanelOpen, registerApi, onSelection, onDocChange, shell, kind = "design",
 }: {
   initialDoc: Doc;
   /** board = 피그잼형 보드(2026-11-20): 점 배경, 보드 도구(스티커 메모, 연결선 …), 타이머. dev 보드처럼 오른쪽 속성 패널 없음(고를 때마다 패널이 열려 캔버스가 줄어드는 게 어색했다) */
@@ -65,6 +65,10 @@ export function DesignFile({
   togglePins: () => void;
   /** 코멘트 모드에 들어갈 때 — 셸이 도크를 코멘트 탭으로 연다 */
   onCommentMode: () => void;
+  /** 코멘트 모드를 나갈 때(Esc · ⌘⌥M · 다른 도구) — 셸이 코멘트 목록도 닫는다(문서 편집기와 같음) */
+  onExitCommentMode?: () => void;
+  /** 상단 💬로 코멘트 목록이 열려 있으면 이 파일도 코멘트 모드(2026-11-20: 툴바 말풍선을 빼고 상단 💬 하나로) */
+  commentPanelOpen?: boolean;
   registerApi: (api: FileApi) => void;
   onSelection: (label: string | null) => void;
   /** 문서가 바뀔 때마다 — 셸이 "내 파일" 썸네일·저장·다시 열기에 쓴다 */
@@ -107,7 +111,7 @@ export function DesignFile({
   const [menu, setMenu] = useState<null | "menu" | "search">(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const imageRef = useRef<HTMLInputElement>(null);
-  // 툴바 오른쪽: 모드(디자인·프로토타입·개발) + 레이아웃 그리드, 도형 묶음의 "이미지 넣기"
+  // 모드(디자인 · 프로토타입 · 개발)와 레이아웃 그리드: 2026-11-20부터 툴바가 아니라 오른쪽 패널 탭 · 메뉴 ☰ › 보기
   const [mode, setMode] = useState<InspectorMode>("design");
   const [grid, setGrid] = useState(false);
   const placeRef = useRef<HTMLInputElement>(null);
@@ -120,10 +124,18 @@ export function DesignFile({
   const demoReplied = useRef(false);
 
   const setTool = (t: Tool) => {
+    if (tool === "comment" && t !== "comment") onExitCommentMode?.();
     setToolRaw(t);
     setDraft(null);
     if (t === "comment") { setSelectedId(null); onCommentMode(); }
   };
+  // 상단 💬(목록)를 열고 닫으면 코멘트 모드도 같이 켜고 끈다
+  useEffect(() => {
+    if (!active) return;
+    if (commentPanelOpen && tool !== "comment") { setToolRaw("comment"); setSelectedId(null); }
+    if (!commentPanelOpen && tool === "comment") { setToolRaw("move"); setDraft(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commentPanelOpen, active]);
 
   const selected = selectedId ? doc.nodes[selectedId] ?? null : null;
   useEffect(() => { if (active) onSelection(selected?.name ?? null); }, [active, selected?.name, onSelection]);
@@ -166,7 +178,7 @@ export function DesignFile({
     const before = threads;
     setThreads((all) => all.filter((t) => t.id !== id));
     setOpenThreadId(null);
-    showToast("스레드를 삭제했어요.", "success", { label: "되돌리기", onClick: () => restoreThreads(before) });
+    showToast("코멘트를 삭제했어요.", "success", { label: "되돌리기", onClick: () => restoreThreads(before) });
   };
   const threadActions = (t: Thread): ThreadActions => ({
     onClose: () => setOpenThreadId(null),
@@ -287,7 +299,7 @@ export function DesignFile({
         setSelectedId(null);
         return;
       }
-      const map: Record<string, Tool> = { v: "move", h: "hand", f: "frame", r: "rect", o: "ellipse", l: "line", t: "text", c: "comment", ...(kind === "board" ? { s: "sticky", x: "arrow", m: "pencil" } as Record<string, Tool> : {}) };
+      const map: Record<string, Tool> = { v: "move", h: "hand", f: "frame", r: "rect", o: "ellipse", l: "line", t: "text", c: "comment", p: "pencil", ...(kind === "board" ? { s: "sticky", x: "arrow", m: "pencil" } as Record<string, Tool> : {}) };
       if (map[k]) setTool(map[k]);
     };
     window.addEventListener("keydown", onKey);
@@ -478,6 +490,8 @@ export function DesignFile({
       { label: "100%로 보기", shortcut: "⌘0", run: () => zoomBy("100") },
       { label: "왼쪽 패널", shortcut: "⌘\\", checked: leftOpen, run: () => setLeftOpen(!leftOpen) },
       { label: "코멘트 보이기", checked: !pinsHidden, run: togglePins },
+      { label: "레이아웃 그리드", shortcut: "⇧G", checked: grid, run: () => setGrid((v) => !v) },
+      { label: "개발 모드", shortcut: "⇧D", checked: mode === "dev", run: () => setMode((m) => (m === "dev" ? "design" : "dev")) },
       { label: "딸깍 AI", shortcut: "⌘J", run: shell.toggleAi },
     ] },
     { label: "개체", items: [
@@ -499,7 +513,7 @@ export function DesignFile({
       { label: "세로 가운데 맞춤", shortcut: "⌥V", run: () => alignInParent("vcenter"), disabled: !parentOf },
       { label: "아래쪽 맞춤", shortcut: "⌥S", run: () => alignInParent("bottom"), disabled: !parentOf },
     ] },
-    { label: "벡터", items: [soon("펜", "P"), soon("윤곽선으로 만들기", "⌥⌘O"), soon("불리언 합치기")] },
+    { label: "벡터", items: [soon("벡터 펜"), soon("윤곽선으로 만들기", "⌥⌘O"), soon("불리언 합치기")] },
     { label: "플러그인", items: [soon("플러그인 찾아보기"), soon("최근 플러그인")] },
     { label: "환경설정", items: [soon("눈금자 보기", "⇧R"), soon("픽셀 격자에 맞추기")] },
     { label: "라이브러리", items: [soon("팀 라이브러리 열기", "⌥3"), soon("내 컴포넌트 게시")] },
@@ -562,7 +576,7 @@ export function DesignFile({
                   <Search size={12} color="#6b7280" />
                 </div>
                 {page.rootIds.length === 0 ? (
-                  <p style={{ fontSize: editorType.caption, color: "#6b7280", padding: "10px 4px", lineHeight: "17px", wordBreak: "keep-all" }}>프레임(F) 또는 도형(R)을 추가해 시작하세요</p>
+                  <p style={{ fontSize: editorType.caption, color: "#6b7280", padding: "10px 4px", lineHeight: "17px", wordBreak: "keep-all" }}>화면(F)이나 도형(R)을 추가해 시작해 보세요</p>
                 ) : (
                   <div className="flex-1 overflow-y-auto ui-scroll" role="tree" aria-label="레이어">
                     {[...page.rootIds].reverse().map((id) => (
@@ -631,16 +645,11 @@ export function DesignFile({
         />
         {kind === "board" ? (
           <>
-            <BoardToolbar tool={tool} setTool={setTool} onActions={() => { setMenu("search"); if (!leftOpen) setLeftOpen(true); }} />
+            <BoardToolbar tool={tool} setTool={setTool} />
             <BoardWidgets doc={doc} vote={vote} setVote={setVote} />
           </>
         ) : (
-          <Toolbar
-            tool={tool} setTool={setTool}
-            onPlaceImage={() => placeRef.current?.click()}
-            onActions={() => { setMenu("search"); if (!leftOpen) setLeftOpen(true); }}
-            mode={mode} setMode={setMode} grid={grid} setGrid={setGrid}
-          />
+          <Toolbar tool={tool} setTool={setTool} onPlaceImage={() => placeRef.current?.click()} />
         )}
         <HelpButton open={helpOpen} setOpen={setHelpOpen} />
         {!leftOpen && (
@@ -726,50 +735,31 @@ function ToolBtn({ label, shortcut, active, onClick, children, dim, compact }: {
 }
 
 /**
- * 하단 툴바(2026-11-19 Figma 툴바 기능으로 확장, 모양은 그대로) — docs/ui-design-editor.md "1-7".
- * 크기(2026-11-19 사용자 "작다"): 도구 버튼 40px·아이콘 20px, 모드 버튼 36px·아이콘 18px, 묶음 메뉴 줄 40px(편집기 상단 버튼과 같은 결).
- *   [이동▾ 이동·손·크기 조절] [영역▾ 프레임·섹션·슬라이스] [도형▾ 사각형·선·화살표·타원·다각형·별·이미지] [만들기▾ 펜·연필] [텍스트] [코멘트] [⚡ 작업]
- *   │ [디자인 · 레이아웃 그리드 · 프로토타입 · 개발 모드]
- * 묶음 버튼은 마지막으로 고른 도구를 보여 주고, ▾로 묶음 안 도구를 고른다. 아직 없는 도구는 흐리게 "준비 중"(누르면 아무것도 바뀌지 않음).
+ * 보드 하단 툴바(2026-11-20, dev 보드 · FigJam 참고). 디자인 툴바와 같은 모양 · 크기 규칙(useCompact · BAR_CLASS).
+ *   [선택 V] [손 H] │ [스티커 메모 S] [사각형 R] [타원 O] [연결선 X] [텍스트 T] [펜 P] [구역 ⇧S]
  */
-/**
- * 보드 하단 툴바(2026-11-20, dev 보드 화면 · FigJam 참고). 디자인 툴바와 같은 크기 규칙(40px · 20px, 좁으면 32px · 16px).
- *   [선택 V] [마커 M] [스티커 메모 S] [사각형 R] [타원 O] [연결선 X] [텍스트 T] [섹션 ⇧S] [코멘트] │ [⚡ 작업]
- */
-function BoardToolbar({ tool, setTool, onActions }: { tool: Tool; setTool: (t: Tool) => void; onActions: () => void }) {
-  const barRef = useRef<HTMLDivElement>(null);
-  const [compact, setCompact] = useState(false);
-  useEffect(() => {
-    const host = barRef.current?.parentElement;
-    if (!host) return;
-    const ro = new ResizeObserver(() => setCompact(host.clientWidth < 640));
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, []);
+function BoardToolbar({ tool, setTool }: { tool: Tool; setTool: (t: Tool) => void }) {
+  const { barRef, compact } = useCompact();
   const ic = compact ? 16 : 20;
-  const items: { tool: Tool; label: string; shortcut?: string; icon: LucideIcon }[] = [
+  const items: (ToolItem & { tool: Tool })[] = [
     { tool: "move", label: "선택", shortcut: "V", icon: MousePointer2 },
-    { tool: "pencil", label: "마커", shortcut: "M", icon: Pencil },
+    { tool: "hand", label: "손", shortcut: "H", icon: Hand },
     { tool: "sticky", label: "스티커 메모", shortcut: "S", icon: StickyNote },
     { tool: "rect", label: "사각형", shortcut: "R", icon: Square },
     { tool: "ellipse", label: "타원", shortcut: "O", icon: Circle },
     { tool: "arrow", label: "연결선", shortcut: "X", icon: Spline },
     { tool: "text", label: "텍스트", shortcut: "T", icon: Type },
-    { tool: "section", label: "섹션", shortcut: "⇧S", icon: SquareDashed },
+    { tool: "pencil", label: "펜", shortcut: "P", icon: Pencil },
+    { tool: "section", label: "구역", shortcut: "⇧S", icon: SquareDashed },
   ];
   return (
-    <div
-      ref={barRef}
-      className={`absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center rounded-2xl bg-white ${compact ? "gap-0.5 p-1" : "gap-1 p-2"}`}
-      style={{ boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }}
-      role="toolbar" aria-label="도구" onPointerDown={(e) => e.stopPropagation()}
-    >
-      {items.map((i) => (
-        <ToolBtn key={i.tool} compact={compact} label={i.label} shortcut={i.shortcut} active={tool === i.tool} onClick={() => setTool(i.tool)}><i.icon size={ic} /></ToolBtn>
+    <div ref={barRef} className={BAR_CLASS(compact)} style={BAR_STYLE} role="toolbar" aria-label="도구" onPointerDown={(e) => e.stopPropagation()}>
+      {items.map((i, n) => (
+        <span key={i.tool} className="contents">
+          {n === 2 && <Sep />}
+          <ToolBtn compact={compact} label={i.label} shortcut={i.shortcut} active={tool === i.tool} onClick={() => setTool(i.tool)}><i.icon size={ic} /></ToolBtn>
+        </span>
       ))}
-      <ToolBtn compact={compact} label="코멘트 남기기" shortcut={COMMENT_SHORTCUT} active={tool === "comment"} onClick={() => setTool(tool === "comment" ? "move" : "comment")}><MessageCircle size={ic} /></ToolBtn>
-      <span className="w-px h-6 mx-1" style={{ background: "#e5e7eb" }} />
-      <ToolBtn compact={compact} label="작업: 명령과 도구 찾기" shortcut="⌘K" onClick={onActions}><Zap size={ic} /></ToolBtn>
     </div>
   );
 }
@@ -923,26 +913,18 @@ function BoardWidgets({ doc, vote, setVote }: { doc: Doc; vote: VoteState; setVo
   );
 }
 
-type ToolItem = { tool?: Tool; label: string; shortcut?: string; icon: LucideIcon; soon?: boolean; run?: () => void };
-function Toolbar({ tool, setTool, onPlaceImage, onActions, mode, setMode, grid, setGrid }: {
-  tool: Tool; setTool: (t: Tool) => void; onPlaceImage: () => void; onActions: () => void;
-  mode: InspectorMode; setMode: (m: InspectorMode) => void; grid: boolean; setGrid: (fn: (v: boolean) => boolean) => void;
-}) {
-  const groups: { id: string; items: ToolItem[] }[] = [
-    { id: "move", items: [{ tool: "move", label: "이동", shortcut: "V", icon: MousePointer2 }, { tool: "hand", label: "손 도구", shortcut: "H", icon: Hand }, { label: "크기 조절", shortcut: "K", icon: Scaling, soon: true }] },
-    { id: "region", items: [{ tool: "frame", label: "프레임", shortcut: "F", icon: Frame }, { tool: "section", label: "섹션", shortcut: "⇧S", icon: SquareDashed }, { label: "슬라이스", shortcut: "S", icon: Slice, soon: true }] },
-    { id: "shape", items: [
-      { tool: "rect", label: "사각형", shortcut: "R", icon: Square }, { tool: "line", label: "선", shortcut: "L", icon: Minus }, { tool: "arrow", label: "화살표", shortcut: "⇧L", icon: MoveUpRight },
-      { tool: "ellipse", label: "타원", shortcut: "O", icon: Circle }, { label: "다각형", icon: Triangle, soon: true }, { label: "별", icon: Star, soon: true },
-      { label: "이미지 넣기", shortcut: "⇧⌘K", icon: ImageIcon, run: onPlaceImage },
-    ] },
-    { id: "create", items: [{ label: "펜", shortcut: "P", icon: PenTool, soon: true }, { tool: "pencil", label: "연필", shortcut: "⇧P", icon: Pencil }] },
-  ];
-  // 묶음마다 마지막으로 고른 도구(단축키로 바꿔도 따라간다)
-  const [last, setLast] = useState<Record<string, Tool>>({ move: "move", region: "frame", shape: "rect", create: "pencil" });
-  useEffect(() => { const g = groups.find((x) => x.items.some((i) => i.tool === tool)); if (g && last[g.id] !== tool) setLast((l) => ({ ...l, [g.id]: tool })); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tool]);
-  const [open, setOpen] = useState<string | null>(null);
-  // 캔버스가 좁으면(양옆 패널 + AI 패널을 다 열었을 때) 32px·16px으로 줄여 툴바가 패널 밑으로 들어가지 않게 한다(2026-11-19)
+/**
+ * 하단 툴바(2026-11-20 딸깍넷에 맞춰 다시 정리, 사용자 "피그마를 너무 따라한 듯"). docs/ui-design-editor.md "하단 툴바 정리".
+ *   [선택 V] [손 H] │ [화면 F] [도형▾ 사각형 · 타원 · 선 · 화살표] [텍스트 T] [펜 P] [이미지]
+ * 뺀 것: 준비 중 도구(크기 조절 · 슬라이스 · 다각형 · 별 · 벡터 펜), ⚡ 작업(메뉴 ☰ 검색 ⌘K와 같음), 모드 스위치(디자인 · 프로토타입은 오른쪽 패널 탭, 그리드 · 개발 모드는 메뉴 ☰ › 보기).
+ * 섹션은 보드의 "구역"으로. 코멘트는 상단 💬(⌘⌥M). 크기 규칙은 그대로(40px · 20px, 좁으면 32px · 16px). 보드 툴바와 같은 모양.
+ */
+type ToolItem = { tool?: Tool; label: string; shortcut?: string; icon: LucideIcon; run?: () => void };
+const SHAPES: ToolItem[] = [
+  { tool: "rect", label: "사각형", shortcut: "R", icon: Square }, { tool: "ellipse", label: "타원", shortcut: "O", icon: Circle },
+  { tool: "line", label: "선", shortcut: "L", icon: Minus }, { tool: "arrow", label: "화살표", shortcut: "⇧L", icon: MoveUpRight },
+];
+function useCompact() {
   const barRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
   useEffect(() => {
@@ -952,79 +934,61 @@ function Toolbar({ tool, setTool, onPlaceImage, onActions, mode, setMode, grid, 
     ro.observe(host);
     return () => ro.disconnect();
   }, []);
+  return { barRef, compact };
+}
+const BAR_CLASS = (compact: boolean) => `absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center rounded-2xl bg-white ${compact ? "gap-0.5 p-1" : "gap-1 p-2"}`;
+const BAR_STYLE = { boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" } as const;
+const Sep = () => <span className="w-px h-6 mx-1 shrink-0" style={{ background: "#e5e7eb" }} />;
+
+function Toolbar({ tool, setTool, onPlaceImage }: { tool: Tool; setTool: (t: Tool) => void; onPlaceImage: () => void }) {
+  const { barRef, compact } = useCompact();
   const ic = compact ? 16 : 20;
+  const [shape, setShape] = useState<Tool>("rect");
+  useEffect(() => { if (SHAPES.some((x) => x.tool === tool)) setShape(tool); }, [tool]);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
-    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest("[data-tool-menu]")) setOpen(null); };
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest("[data-tool-menu]")) setOpen(false); };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
-  const modes: { id: InspectorMode | "grid"; label: string; shortcut?: string; icon: LucideIcon }[] = [
-    { id: "design", label: "디자인", icon: Pencil }, { id: "grid", label: "레이아웃 그리드", shortcut: "⇧G", icon: Hash },
-    { id: "prototype", label: "프로토타입", icon: Workflow }, { id: "dev", label: "개발 모드", shortcut: "⇧D", icon: Code2 },
-  ];
+  const cur = SHAPES.find((x) => x.tool === shape) ?? SHAPES[0];
+  const btn = (i: ToolItem) => <ToolBtn key={i.label} compact={compact} label={i.label} shortcut={i.shortcut} active={!!i.tool && tool === i.tool} onClick={() => (i.run ? i.run() : i.tool && setTool(i.tool))}><i.icon size={ic} /></ToolBtn>;
   return (
-    <div
-      ref={barRef}
-      className={`absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center rounded-2xl bg-white ${compact ? "gap-0.5 p-1" : "gap-1 p-2"}`}
-      style={{ boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }}
-      role="toolbar" aria-label="도구" onPointerDown={(e) => e.stopPropagation()}
-    >
-      {groups.map((g) => {
-        const cur = g.items.find((i) => i.tool === last[g.id]) ?? g.items[0];
-        const active = g.items.some((i) => i.tool && i.tool === tool);
-        return (
-          <div key={g.id} className="relative flex items-center" data-tool-menu>
-            <ToolBtn compact={compact} label={cur.label} shortcut={cur.shortcut} active={active} onClick={() => cur.tool && setTool(cur.tool)}><cur.icon size={ic} /></ToolBtn>
-            <IconTooltip label="도구 더 보기" side="top"><button type="button" aria-label={`${cur.label} 묶음 도구 더 보기`} aria-expanded={open === g.id} onClick={() => setOpen(open === g.id ? null : g.id)} className={`w-5 ${compact ? "h-8" : "h-10"} flex items-center justify-center rounded-md hover:bg-[#f3f4f6] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]`}>
-              <ChevronDown size={14} color="#6b7280" />
-            </button></IconTooltip>
-            {open === g.id && (
-              <div className="absolute bottom-14 left-0 z-30 bg-white rounded-xl py-2 min-w-[220px]" style={{ ...f, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }} role="menu" aria-label="도구">
-                {g.items.map((i) => (
-                  <button key={i.label} type="button" role="menuitem" aria-disabled={i.soon || undefined}
-                    onClick={() => { if (i.soon) return; setOpen(null); if (i.run) i.run(); else if (i.tool) setTool(i.tool); }}
-                    className={`w-full flex items-center gap-3 px-3 h-10 text-left outline-none ${i.soon ? "cursor-default" : "hover:bg-[#f3f4f6] focus-visible:bg-[#f3f4f6]"}`}
-                    style={{ color: i.soon ? "#9ca3af" : "#111827" }}
-                  >
-                    <i.icon size={18} />
-                    <span className="flex-1" style={{ fontSize: editorType.body, fontWeight: i.tool === tool ? 700 : 500 }}>{i.label}</span>
-                    {i.soon ? <span className="rounded px-1" style={{ fontSize: editorType.caption, fontWeight: 700, color: "#64748b", background: "#f1f5f9" }}>준비 중</span> : i.shortcut && <span style={{ fontSize: editorType.caption, color: "#9ca3af" }}>{i.shortcut}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
+    <div ref={barRef} className={BAR_CLASS(compact)} style={BAR_STYLE} role="toolbar" aria-label="도구" onPointerDown={(e) => e.stopPropagation()}>
+      {btn({ tool: "move", label: "선택", shortcut: "V", icon: MousePointer2 })}
+      {btn({ tool: "hand", label: "손", shortcut: "H", icon: Hand })}
+      <Sep />
+      {btn({ tool: "frame", label: "화면", shortcut: "F", icon: Frame })}
+      <div className="relative flex items-center" data-tool-menu>
+        <ToolBtn compact={compact} label={cur.label} shortcut={cur.shortcut} active={SHAPES.some((x) => x.tool === tool)} onClick={() => setTool(shape)}><cur.icon size={ic} /></ToolBtn>
+        <IconTooltip label="도형 더 보기" side="top"><button type="button" aria-label="도형 더 보기" aria-expanded={open} onClick={() => setOpen((v) => !v)} className={`w-5 ${compact ? "h-8" : "h-10"} flex items-center justify-center rounded-md hover:bg-[#f3f4f6] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]`}>
+          <ChevronDown size={14} color="#6b7280" />
+        </button></IconTooltip>
+        {open && (
+          <div className="absolute bottom-14 left-0 z-30 bg-white rounded-xl py-2 min-w-[200px]" style={{ ...f, ...BAR_STYLE }} role="menu" aria-label="도형">
+            {SHAPES.map((i) => (
+              <button key={i.label} type="button" role="menuitem" onClick={() => { setOpen(false); if (i.tool) setTool(i.tool); }} className="w-full flex items-center gap-3 px-3 h-10 text-left outline-none hover:bg-[#f3f4f6] focus-visible:bg-[#f3f4f6]" style={{ color: "#111827" }}>
+                <i.icon size={18} />
+                <span className="flex-1" style={{ fontSize: editorType.body, fontWeight: i.tool === tool ? 700 : 500 }}>{i.label}</span>
+                <span style={{ fontSize: editorType.caption, color: "#9ca3af" }}>{i.shortcut}</span>
+              </button>
+            ))}
           </div>
-        );
-      })}
-      <ToolBtn compact={compact} label="텍스트" shortcut="T" active={tool === "text"} onClick={() => setTool("text")}><Type size={ic} /></ToolBtn>
-      <ToolBtn label="코멘트 남기기" shortcut={COMMENT_SHORTCUT} active={tool === "comment"} onClick={() => setTool(tool === "comment" ? "move" : "comment")} compact={compact}><MessageCircle size={ic} /></ToolBtn>
-      <ToolBtn compact={compact} label="작업: 명령·도구 찾기" shortcut="⌘K" onClick={onActions}><Zap size={ic} /></ToolBtn>
-      <span className="w-px h-6 mx-1" style={{ background: "#e5e7eb" }} />
-      <div className="flex items-center gap-0.5 rounded-lg p-0.5" style={{ background: "#f3f4f6" }} role="group" aria-label="모드">
-        {modes.map((m) => {
-          const on = m.id === "grid" ? grid : mode === m.id;
-          return (
-            <IconTooltip key={m.id} label={m.shortcut ? `${m.label} (${m.shortcut})` : m.label} side="top"><button
-              type="button" aria-label={m.label} aria-pressed={on}
-              onClick={() => (m.id === "grid" ? setGrid((v) => !v) : setMode(m.id))}
-              className={`${compact ? "size-7" : "size-9"} rounded-md flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]`}
-              style={{ background: on ? "#fff" : undefined, boxShadow: on ? "0 1px 2px rgba(0,0,0,0.08)" : undefined, color: on ? EDITOR_ACCENT : "#6b7280" }}
-            >
-              <m.icon size={compact ? 14 : 18} />
-            </button></IconTooltip>
-          );
-        })}
+        )}
       </div>
+      {btn({ tool: "text", label: "텍스트", shortcut: "T", icon: Type })}
+      {btn({ tool: "pencil", label: "펜", shortcut: "P", icon: Pencil })}
+      {btn({ label: "이미지 넣기", shortcut: "⇧⌘K", icon: ImageIcon, run: onPlaceImage })}
     </div>
   );
 }
 
-const SHORTCUTS = [["V", "이동"], ["H", "손 도구"], ["F", "프레임"], ["⇧S", "섹션"], ["R", "사각형"], ["O", "타원"], ["L", "선"], ["⇧L", "화살표"], ["⇧P", "연필"], ["⇧⌘K", "이미지 넣기"], ["T", "텍스트"], [COMMENT_SHORTCUT, "코멘트"], ["⌘K", "작업(명령 찾기)"], ["⇧G", "레이아웃 그리드"], ["⇧D", "개발 모드"], ["Space+드래그", "화면 이동"], ["⌘+휠", "확대·축소"], ["⇧1", "화면에 맞추기"], ["⌘Z", "실행 취소"], ["Delete", "삭제"]] as const;
+const SHORTCUTS = [["V", "선택"], ["H", "손"], ["F", "화면"], ["R", "사각형"], ["O", "타원"], ["L", "선"], ["⇧L", "화살표"], ["T", "텍스트"], ["P", "펜"], ["⇧⌘K", "이미지 넣기"], [COMMENT_SHORTCUT, "코멘트"], ["⌘K", "메뉴 검색"], ["⇧G", "레이아웃 그리드"], ["⇧D", "개발 모드"], ["Space+드래그", "화면 이동"], ["⌘+휠", "확대와 축소"], ["⇧1", "화면에 맞추기"], ["⌘Z", "실행 취소"], ["Delete", "삭제"]] as const;
 
 function HelpButton({ open, setOpen }: { open: boolean; setOpen: Dispatch<SetStateAction<boolean>> }) {
   return (
-    <div className="absolute bottom-20 right-4" onPointerDown={(e) => e.stopPropagation()} style={f}>{/* 툴바를 키운 뒤(2026-11-19) 좁은 캔버스에서 툴바 끝과 겹쳐 툴바 줄 위로 올렸다 */}
+    <div className="absolute bottom-4 right-4 z-10" onPointerDown={(e) => e.stopPropagation()} style={f}>{/* 2026-11-20 사용자 "오른쪽 아래에 붙여 줘": 캔버스 오른쪽 아래 구석(16px). 툴바 줄 위로 띄워 두던 것을 내렸다 */}
       {open && (
         <div className="absolute bottom-10 right-0 bg-white rounded-xl p-3" style={{ width: 210, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }}>
           <p style={{ fontSize: editorType.caption, fontWeight: 700, color: "#111827", marginBottom: 6 }}>단축키</p>
