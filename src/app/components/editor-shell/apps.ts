@@ -17,12 +17,12 @@ export type EditorAppId = "hangul" | "word" | "excel" | "ppt" | "pdf" | "uidesig
 export interface EditorApp { id: EditorAppId; label: string; hint: string; art: string; soon?: boolean }
 
 export const EDITOR_APPS: EditorApp[] = [
-  { id: "hangul", label: "한글", hint: "HWP·HWPX 문서 편집", art: artHangul }, // 한글 편집기
+  { id: "hangul", label: "한글", hint: "HWP, HWPX 문서 편집", art: artHangul }, // 한글 편집기
   { id: "word", label: "워드", hint: "DOCX 문서 편집", art: artWord }, // 딸깍 문서
   { id: "excel", label: "엑셀", hint: "XLSX 스프레드시트 편집", art: artExcel }, // 딸깍 시트
   { id: "ppt", label: "PPT", hint: "PPTX 프레젠테이션 편집", art: artPpt }, // 딸깍 슬라이드
-  { id: "pdf", label: "PDF", hint: "PDF 수정·저장", art: artPdf }, // 딸깍 PDF(2026-11-19 연결)
-  { id: "uidesign", label: "UI 디자인", hint: "피그마 파일·화면 디자인", art: artUiDesign }, // 딸깍 UI 디자인
+  { id: "pdf", label: "PDF", hint: "PDF 수정과 저장", art: artPdf }, // 딸깍 PDF(2026-11-19 연결)
+  { id: "uidesign", label: "UI 디자인", hint: "피그마 파일과 화면 디자인", art: artUiDesign }, // 딸깍 UI 디자인
   { id: "image", label: "이미지", hint: "레이어 사진 편집", art: artImage }, // 딸깍 포토(레이어 분리 포함)
   { id: "video", label: "영상", hint: "간단한 영상 편집", art: artVideo }, // 딸깍 영상편집
 ];

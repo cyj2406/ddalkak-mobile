@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { ChevronDown, ChevronRight, Circle, Code2, Frame, Hand, Hash, HelpCircle, Image as ImageIcon, Menu, MessageCircle, Minus, MousePointer2, MoveUpRight, PanelLeft, Pencil, PenTool, Plus, Scaling, Search, Slice, Square, SquareDashed, Star, Triangle, Type, Workflow, Zap, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronRight, Circle, StickyNote, Timer, Spline, Vote, Code2, Frame, Hand, Hash, HelpCircle, Image as ImageIcon, Menu, MessageCircle, Minus, MousePointer2, MoveUpRight, PanelLeft, Pencil, PenTool, Plus, Scaling, Search, Slice, Square, SquareDashed, Star, Triangle, Type, Workflow, Zap, type LucideIcon } from "lucide-react";
 
 import { showToast } from "@/app/components/common/Toast";
 import type { AiAttachment, AiRequest, AiResult } from "@/app/components/editor-shell/AiAssistantPanel";
-import { DEMO_MEMBERS, DEMO_TEAMMATE, type CommentAuthor } from "@/app/components/editor-shell/comments";
+import { COMMENT_SHORTCUT, DEMO_MEMBERS, DEMO_TEAMMATE, isCommentShortcut, type CommentAuthor } from "@/app/components/editor-shell/comments";
 import { creditFor } from "@/app/state/aiModels";
 import { setCreditBalance } from "@/app/state/creditBalance";
 import { getProfile } from "@/app/state/profile";
@@ -19,6 +19,7 @@ import {
   type Doc, type DNode, type Thread,
 } from "./model";
 import { IconTooltip } from "@/app/components/viewer/IconTooltip";
+import { josa } from "@/app/copy";
 
 /**
  * 디자인 파일 하나(탭 하나) — 파일 패널·캔버스·툴바·속성 패널. 기획: docs/ui-design-editor.md.
@@ -51,9 +52,11 @@ const LEFT_KEY = "ddalkkak.uidesign.leftPanel";
 const profileEmail = getProfile().email;
 
 export function DesignFile({
-  initialDoc, active, me, threads, setThreads, pinsHidden, togglePins, onCommentMode, registerApi, onSelection, onDocChange, shell,
+  initialDoc, active, me, threads, setThreads, pinsHidden, togglePins, onCommentMode, registerApi, onSelection, onDocChange, shell, kind = "design",
 }: {
   initialDoc: Doc;
+  /** board = 피그잼형 보드(2026-11-20): 점 배경, 보드 도구(스티커 메모, 연결선 …), 타이머. dev 보드처럼 오른쪽 속성 패널 없음(고를 때마다 패널이 열려 캔버스가 줄어드는 게 어색했다) */
+  kind?: "design" | "board";
   active: boolean;
   me: CommentAuthor;
   threads: Thread[];
@@ -91,6 +94,8 @@ export function DesignFile({
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [tool, setToolRaw] = useState<Tool>("move");
+  // 보드 투표 세션(2026-11-20): per = 1인당 표, target = 모든 개체 | 스티커 메모만, mine = 내 표, ended = 끝나고 결과 보는 중
+  const [vote, setVote] = useState<{ per: number; target: "all" | "sticky"; mine: Record<string, number>; ended: boolean } | null>(null);
   const [view, setView] = useState<View>({ x: 120, y: 100, zoom: 1 });
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [rail, setRail] = useState<"file" | "assets" | "vars">("file");
@@ -240,6 +245,8 @@ export function DesignFile({
     if (!active) return;
     const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
+      // ⌘⌥M(Ctrl+Alt+M): 딸깍넷 공통 코멘트 단축키. 입력칸 안에서도 동작(딸깍 AI ⌘J처럼)
+      if (isCommentShortcut(e)) { e.preventDefault(); setTool(tool === "comment" ? "move" : "comment"); return; }
       if (typing(e.target)) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
@@ -280,7 +287,7 @@ export function DesignFile({
         setSelectedId(null);
         return;
       }
-      const map: Record<string, Tool> = { v: "move", h: "hand", f: "frame", r: "rect", o: "ellipse", l: "line", t: "text", c: "comment" };
+      const map: Record<string, Tool> = { v: "move", h: "hand", f: "frame", r: "rect", o: "ellipse", l: "line", t: "text", c: "comment", ...(kind === "board" ? { s: "sticky", x: "arrow", m: "pencil" } as Record<string, Tool> : {}) };
       if (map[k]) setTool(map[k]);
     };
     window.addEventListener("keydown", onKey);
@@ -314,7 +321,7 @@ export function DesignFile({
         const credit = creditFor(req.model, 20 + changed);
         if (credit) setCreditBalance((b) => b - credit);
         return {
-          summary: `"${startDoc.nodes[sel].name}"을(를) 다크 모드로 바꿨어요. 강조색은 그대로 뒀어요.`, credit, stepsDone: 2, stopped: false, addedCount: 0,
+          summary: `${josa(`"${startDoc.nodes[sel].name}"`, "을/를")} 다크 모드로 바꿨어요. 강조색은 그대로 뒀어요.`, credit, stepsDone: 2, stopped: false, addedCount: 0,
           target: { id: sel, label: startDoc.nodes[sel].name, meta: `색 ${changed}곳 바꿈 · ⌘Z로 되돌리기` },
         };
       }
@@ -377,7 +384,7 @@ export function DesignFile({
     showResult: (r) => {
       const tid = r.target?.id ?? r.createdRootId;
       const n = tid ? docRef.current.nodes[tid] : null;
-      if (!n) { showToast("만든 요소를 찾을 수 없어요(지워졌을 수 있어요).", "error"); return; }
+      if (!n) { showToast("만든 요소를 찾지 못했어요. 이미 지워졌을 수 있어요.", "error"); return; }
       setSelectedId(n.id);
       setToolRaw("move");
       fitTo(n.x, n.y, n.x + n.w, n.y + n.h, 1);
@@ -470,7 +477,7 @@ export function DesignFile({
       { label: "화면에 맞추기", shortcut: "⇧1", run: () => zoomBy("fit") },
       { label: "100%로 보기", shortcut: "⌘0", run: () => zoomBy("100") },
       { label: "왼쪽 패널", shortcut: "⌘\\", checked: leftOpen, run: () => setLeftOpen(!leftOpen) },
-      { label: "코멘트 보이기", shortcut: "⇧C", checked: !pinsHidden, run: togglePins },
+      { label: "코멘트 보이기", checked: !pinsHidden, run: togglePins },
       { label: "딸깍 AI", shortcut: "⌘J", run: shell.toggleAi },
     ] },
     { label: "개체", items: [
@@ -573,7 +580,7 @@ export function DesignFile({
             </>
           ) : (
             <p style={{ fontSize: editorType.caption, color: "#6b7280", padding: 14, lineHeight: "17px", wordBreak: "keep-all" }}>
-              {rail === "assets" ? "컴포넌트를 만들면 여기에 모여요. 에셋 라이브러리는 준비 중이에요." : "색·간격 같은 변수를 모아 관리하는 기능은 준비 중이에요."}
+              {rail === "assets" ? "컴포넌트를 만들면 여기에 모여요. 에셋 라이브러리는 준비 중이에요." : "색이나 간격 같은 변수를 모아 관리하는 기능은 준비 중이에요."}
             </p>
           )}
         </aside>
@@ -601,7 +608,7 @@ export function DesignFile({
       {/* 캔버스 + 하단 툴바 */}
       <div ref={canvasWrap} className="relative flex-1 min-w-0 flex">
         <Canvas
-          doc={doc} page={page} view={view} setView={setView} tool={tool} setTool={setTool} grid={grid}
+          doc={doc} page={page} view={view} setView={setView} tool={tool} setTool={setTool} grid={grid} board={kind === "board"}
           selectedId={selectedId} setSelectedId={setSelectedId} hoverId={hoverId}
           editingTextId={editingTextId} setEditingTextId={setEditingTextId}
           setDocLive={(d) => { docRef.current = d; setDoc(d); }} commitFrom={commitFrom}
@@ -611,13 +618,30 @@ export function DesignFile({
           onCreateThread={createThread} threadActions={threadActions} members={members} anchorLabel={anchorLabel}
           draftFor={(id) => threads.find((x) => x.id === id)?.myDraft ?? ""} onMoveThread={moveThread}
           pinsHidden={pinsHidden} aiCursorNodeId={aiCursor} aiBuildingId={aiBuilding}
+          votes={vote?.mine}
+          {...(vote && !vote.ended ? {
+            voteTargetOf: (id: string) => voteTarget(doc, id, vote.target),
+            onVote: (id: string) => {
+              const used = Object.values(vote.mine).reduce((a, b) => a + b, 0);
+              if (used >= vote.per) { showToast("표를 다 썼어요. 숫자 배지를 누르면 표를 뺄 수 있어요.", "error"); return; }
+              setVote({ ...vote, mine: { ...vote.mine, [id]: (vote.mine[id] ?? 0) + 1 } });
+            },
+          } : {})}
+          onUnvote={vote && !vote.ended ? (id) => setVote({ ...vote, mine: { ...vote.mine, [id]: Math.max(0, (vote.mine[id] ?? 0) - 1) } }) : undefined}
         />
-        <Toolbar
-          tool={tool} setTool={setTool}
-          onPlaceImage={() => placeRef.current?.click()}
-          onActions={() => { setMenu("search"); if (!leftOpen) setLeftOpen(true); }}
-          mode={mode} setMode={setMode} grid={grid} setGrid={setGrid}
-        />
+        {kind === "board" ? (
+          <>
+            <BoardToolbar tool={tool} setTool={setTool} onActions={() => { setMenu("search"); if (!leftOpen) setLeftOpen(true); }} />
+            <BoardWidgets doc={doc} vote={vote} setVote={setVote} />
+          </>
+        ) : (
+          <Toolbar
+            tool={tool} setTool={setTool}
+            onPlaceImage={() => placeRef.current?.click()}
+            onActions={() => { setMenu("search"); if (!leftOpen) setLeftOpen(true); }}
+            mode={mode} setMode={setMode} grid={grid} setGrid={setGrid}
+          />
+        )}
         <HelpButton open={helpOpen} setOpen={setHelpOpen} />
         {!leftOpen && (
           <div className="absolute top-3 left-3 flex items-center gap-0.5 rounded-xl bg-white p-1" style={{ boxShadow: "0px 2px 10px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb", zIndex: 9 }} onPointerDown={(e) => e.stopPropagation()}>
@@ -635,10 +659,10 @@ export function DesignFile({
         )}
       </div>
 
-      <Inspector
+      {kind !== "board" && <Inspector
         page={page} node={selected} zoom={view.zoom} onZoom={zoomBy} onNode={patchSelected} mode={mode} onMode={setMode}
         onPageBg={(bg) => commit({ ...docRef.current, pages: docRef.current.pages.map((p) => (p.id === page.id ? { ...p, bg } : p)) })}
-      />
+      />}
     </div>
   );
 }
@@ -708,6 +732,197 @@ function ToolBtn({ label, shortcut, active, onClick, children, dim, compact }: {
  *   │ [디자인 · 레이아웃 그리드 · 프로토타입 · 개발 모드]
  * 묶음 버튼은 마지막으로 고른 도구를 보여 주고, ▾로 묶음 안 도구를 고른다. 아직 없는 도구는 흐리게 "준비 중"(누르면 아무것도 바뀌지 않음).
  */
+/**
+ * 보드 하단 툴바(2026-11-20, dev 보드 화면 · FigJam 참고). 디자인 툴바와 같은 크기 규칙(40px · 20px, 좁으면 32px · 16px).
+ *   [선택 V] [마커 M] [스티커 메모 S] [사각형 R] [타원 O] [연결선 X] [텍스트 T] [섹션 ⇧S] [코멘트] │ [⚡ 작업]
+ */
+function BoardToolbar({ tool, setTool, onActions }: { tool: Tool; setTool: (t: Tool) => void; onActions: () => void }) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const host = barRef.current?.parentElement;
+    if (!host) return;
+    const ro = new ResizeObserver(() => setCompact(host.clientWidth < 640));
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
+  const ic = compact ? 16 : 20;
+  const items: { tool: Tool; label: string; shortcut?: string; icon: LucideIcon }[] = [
+    { tool: "move", label: "선택", shortcut: "V", icon: MousePointer2 },
+    { tool: "pencil", label: "마커", shortcut: "M", icon: Pencil },
+    { tool: "sticky", label: "스티커 메모", shortcut: "S", icon: StickyNote },
+    { tool: "rect", label: "사각형", shortcut: "R", icon: Square },
+    { tool: "ellipse", label: "타원", shortcut: "O", icon: Circle },
+    { tool: "arrow", label: "연결선", shortcut: "X", icon: Spline },
+    { tool: "text", label: "텍스트", shortcut: "T", icon: Type },
+    { tool: "section", label: "섹션", shortcut: "⇧S", icon: SquareDashed },
+  ];
+  return (
+    <div
+      ref={barRef}
+      className={`absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center rounded-2xl bg-white ${compact ? "gap-0.5 p-1" : "gap-1 p-2"}`}
+      style={{ boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }}
+      role="toolbar" aria-label="도구" onPointerDown={(e) => e.stopPropagation()}
+    >
+      {items.map((i) => (
+        <ToolBtn key={i.tool} compact={compact} label={i.label} shortcut={i.shortcut} active={tool === i.tool} onClick={() => setTool(i.tool)}><i.icon size={ic} /></ToolBtn>
+      ))}
+      <ToolBtn compact={compact} label="코멘트 남기기" shortcut={COMMENT_SHORTCUT} active={tool === "comment"} onClick={() => setTool(tool === "comment" ? "move" : "comment")}><MessageCircle size={ic} /></ToolBtn>
+      <span className="w-px h-6 mx-1" style={{ background: "#e5e7eb" }} />
+      <ToolBtn compact={compact} label="작업: 명령과 도구 찾기" shortcut="⌘K" onClick={onActions}><Zap size={ic} /></ToolBtn>
+    </div>
+  );
+}
+
+/** 투표 대상 찾기 — 스티커 메모만: 가장 가까운 "Sticky" 프레임, 모든 개체: 페이지 최상위 개체 */
+function voteTarget(doc: Doc, id: string, target: "all" | "sticky"): string | null {
+  if (target === "sticky") {
+    for (let cur: string | null = id; cur; cur = doc.nodes[cur]?.parentId ?? null) if (doc.nodes[cur]?.type === "frame" && doc.nodes[cur].name.startsWith("Sticky")) return cur;
+    return null;
+  }
+  let r = id;
+  while (doc.nodes[r]?.parentId) r = doc.nodes[r].parentId!;
+  return doc.nodes[r] ? r : null;
+}
+/** 투표 결과에 보일 이름 — 스티커 메모는 안의 글자 */
+function voteLabel(doc: Doc, id: string): string {
+  const n = doc.nodes[id];
+  if (!n) return "지운 개체";
+  const t = n.children.map((c) => doc.nodes[c]).find((c) => c?.type === "text" && c.text?.trim());
+  return t?.text?.trim().split("\n")[0] || n.name;
+}
+
+type VoteState = { per: number; target: "all" | "sticky"; mine: Record<string, number>; ended: boolean } | null;
+const POP = "absolute right-0 top-12 bg-white rounded-xl p-4 w-[300px]";
+const POP_STYLE = { boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" } as const;
+const PRIMARY = "h-10 px-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[#4f7bff] hover:brightness-95 disabled:opacity-40";
+const CHIP = "h-10 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff] hover:bg-[#f8fafc]";
+
+/**
+ * 보드 오른쪽 위 위젯(2026-11-20, dev 보드 · FigJam 참고, 모양은 딸깍 규칙: 글자 14/12, 칸 40px, 주요 버튼 = 편집기 초록).
+ *  ⏱ 타이머: 1 · 3 · 5 · 10 · 15분 또는 직접 입력 → 시작. 도는 동안 남은 시간 + [멈춤], 끝나면 토스트.
+ *  🗳 투표: 1인당 표 수 · 대상(모든 개체 / 스티커 메모) → 투표 시작. 진행 중엔 위쪽 띠(남은 표 · 투표 끝내기), 끝나면 결과 카드.
+ */
+function BoardWidgets({ doc, vote, setVote }: { doc: Doc; vote: VoteState; setVote: (v: VoteState) => void }) {
+  const [open, setOpen] = useState<"timer" | "vote" | null>(null);
+  const [endAt, setEndAt] = useState<number | null>(null);
+  const [mins, setMins] = useState(5);
+  const [per, setPer] = useState(3);
+  const [target, setTarget] = useState<"all" | "sticky">("all");
+  const [, tick] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!endAt) return;
+    const t = window.setInterval(() => {
+      if (Date.now() >= endAt) { setEndAt(null); showToast("타이머가 끝났어요."); }
+      tick((n) => n + 1);
+    }, 500);
+    return () => window.clearInterval(t);
+  }, [endAt]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(null); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", key); };
+  }, [open]);
+  const left = endAt ? Math.max(0, Math.ceil((endAt - Date.now()) / 1000)) : 0;
+  const mmss = `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`;
+  const startTimer = (m: number) => { setEndAt(Date.now() + m * 60000); setOpen(null); };
+  const voting = !!vote && !vote.ended;
+  const used = vote ? Object.values(vote.mine).reduce((a, b) => a + b, 0) : 0;
+  const results = vote?.ended ? Object.entries(vote.mine).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]) : [];
+  const iconBtn = "size-8 rounded-lg flex items-center justify-center hover:bg-[#f3f4f6] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]";
+  const field = "h-10 w-20 rounded-lg px-3 outline-none border border-[#e5e7eb] focus:border-[#4f7bff]";
+
+  return (
+    <>
+      <div ref={ref} className="absolute top-3 right-3 z-10" style={f} onPointerDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 rounded-xl bg-white p-1" style={{ boxShadow: "0px 2px 10px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" }}>
+          {endAt ? (
+            <>
+              <span className="flex items-center gap-1.5 px-2 h-8" style={{ fontSize: editorType.body, fontWeight: 700, color: "#111827", fontVariantNumeric: "tabular-nums" }}><Timer size={16} color={EDITOR_ACCENT} />{mmss}</span>
+              <button type="button" onClick={() => setEndAt(null)} className="rounded-lg px-2 h-8 hover:bg-[#f3f4f6] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: editorType.label, color: "#475569" }}>멈춤</button>
+            </>
+          ) : (
+            <IconTooltip label="타이머" side="bottom"><button type="button" aria-label="타이머" aria-expanded={open === "timer"} onClick={() => setOpen(open === "timer" ? null : "timer")} className={iconBtn} style={{ background: open === "timer" ? "#f3f4f6" : undefined }}><Timer size={18} color="#111827" /></button></IconTooltip>
+          )}
+          <span className="w-px h-5" style={{ background: "#e5e7eb" }} />
+          <IconTooltip label="투표" side="bottom"><button type="button" aria-label="투표" aria-expanded={open === "vote"} disabled={voting} onClick={() => setOpen(open === "vote" ? null : "vote")} className={`${iconBtn} disabled:opacity-40`} style={{ background: open === "vote" ? "#f3f4f6" : undefined }}><Vote size={18} color="#111827" /></button></IconTooltip>
+        </div>
+
+        {open === "timer" && (
+          <div className={POP} style={POP_STYLE} role="dialog" aria-label="타이머">
+            <p style={{ fontSize: editorType.body, fontWeight: 700, color: "#111827" }}>타이머</p>
+            <div className="grid grid-cols-5 gap-2 mt-3">
+              {[1, 3, 5, 10, 15].map((m) => (
+                <button key={m} type="button" onClick={() => startTimer(m)} className={CHIP} style={{ border: "1px solid #e5e7eb", fontSize: editorType.body, color: "#111827" }}>{m}분</button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <label className="flex items-center gap-2" style={{ fontSize: editorType.body, color: "#64748b" }}>
+                직접 입력
+                <input type="number" min={1} max={60} value={mins} onChange={(e) => setMins(Math.min(60, Math.max(1, Number(e.target.value) || 1)))} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") startTimer(mins); }} className={field} style={{ fontSize: editorType.body, color: "#111827" }} aria-label="분" />
+                분
+              </label>
+              <button type="button" onClick={() => startTimer(mins)} className={`${PRIMARY} ml-auto`} style={{ background: EDITOR_ACCENT, color: "#fff", fontSize: editorType.body, fontWeight: 600 }}>시작</button>
+            </div>
+          </div>
+        )}
+
+        {open === "vote" && (
+          <div className={POP} style={POP_STYLE} role="dialog" aria-label="투표">
+            <p style={{ fontSize: editorType.body, fontWeight: 700, color: "#111827" }}>투표</p>
+            <p style={{ fontSize: editorType.caption, lineHeight: "18px", color: "#64748b", marginTop: 4, wordBreak: "keep-all" }}>마음에 드는 개체를 눌러 표를 줘요. 많이 받은 순서로 결과를 보여 줘요.</p>
+            <label className="flex items-center justify-between mt-4" style={{ fontSize: editorType.body, color: "#111827" }}>
+              1인당 표 수
+              <input type="number" min={1} max={20} value={per} onChange={(e) => setPer(Math.min(20, Math.max(1, Number(e.target.value) || 1)))} onKeyDown={(e) => e.stopPropagation()} className={field} style={{ fontSize: editorType.body }} />
+            </label>
+            <div className="mt-3" role="radiogroup" aria-label="투표할 대상">
+              <p style={{ fontSize: editorType.caption, fontWeight: 600, color: "#64748b" }}>투표할 대상</p>
+              {([["all", "모든 개체"], ["sticky", "스티커 메모만"]] as const).map(([k, l]) => (
+                <button key={k} type="button" role="radio" aria-checked={target === k} onClick={() => setTarget(k)} className="w-full h-10 flex items-center gap-3 rounded-lg px-1 text-left hover:bg-[#f8fafc] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: editorType.body, color: "#111827" }}>
+                  <span className="size-5 rounded-full shrink-0" style={{ boxShadow: `inset 0 0 0 ${target === k ? 6 : 1.5}px ${target === k ? EDITOR_ACCENT : "#cbd5e1"}` }} />{l}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => { setVote({ per, target, mine: {}, ended: false }); setOpen(null); }} className={`${PRIMARY} w-full mt-3`} style={{ background: EDITOR_ACCENT, color: "#fff", fontSize: editorType.body, fontWeight: 600 }}>투표 시작</button>
+          </div>
+        )}
+
+        {vote?.ended && (
+          <div className={POP} style={POP_STYLE} role="dialog" aria-label="투표 결과">
+            <p style={{ fontSize: editorType.body, fontWeight: 700, color: "#111827" }}>투표 결과</p>
+            {results.length === 0 ? (
+              <p style={{ fontSize: editorType.body, color: "#64748b", marginTop: 8 }}>아무도 투표하지 않았어요.</p>
+            ) : (
+              <ol className="mt-3 flex flex-col gap-2">
+                {results.map(([id, n], i) => (
+                  <li key={id} className="flex items-center gap-3">
+                    <span className="size-6 shrink-0 rounded-full flex items-center justify-center" style={{ background: i === 0 ? EDITOR_ACCENT : "#f1f5f9", color: i === 0 ? "#fff" : "#475569", fontSize: editorType.caption, fontWeight: 700 }}>{i + 1}</span>
+                    <span className="flex-1 min-w-0 truncate" style={{ fontSize: editorType.body, color: "#111827" }}>{voteLabel(doc, id)}</span>
+                    <span style={{ fontSize: editorType.body, fontWeight: 700, color: "#111827" }}>{n}표</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <button type="button" onClick={() => setVote(null)} className="w-full h-10 mt-4 rounded-lg outline-none hover:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ border: "1px solid #e5e7eb", fontSize: editorType.body, fontWeight: 600, color: "#111827" }}>결과 지우기</button>
+          </div>
+        )}
+      </div>
+
+      {voting && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 rounded-full pl-4 pr-1.5 py-1.5" style={{ ...f, background: "#111827", color: "#fff", whiteSpace: "nowrap" }} onPointerDown={(e) => e.stopPropagation()}>
+          <span style={{ fontSize: editorType.body, fontWeight: 600 }}>투표 중</span>
+          <span style={{ fontSize: editorType.body, color: "#cbd5e1" }}>남은 표 {vote!.per - used}개 · {vote!.target === "sticky" ? "스티커 메모" : "개체"}를 눌러 투표해요</span>
+          <button type="button" onClick={() => setVote({ ...vote!, ended: true })} className="h-8 px-3 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ background: "#fff", color: "#111827", fontSize: editorType.label, fontWeight: 600 }}>투표 끝내기</button>
+        </div>
+      )}
+    </>
+  );
+}
+
 type ToolItem = { tool?: Tool; label: string; shortcut?: string; icon: LucideIcon; soon?: boolean; run?: () => void };
 function Toolbar({ tool, setTool, onPlaceImage, onActions, mode, setMode, grid, setGrid }: {
   tool: Tool; setTool: (t: Tool) => void; onPlaceImage: () => void; onActions: () => void;
@@ -783,7 +998,7 @@ function Toolbar({ tool, setTool, onPlaceImage, onActions, mode, setMode, grid, 
         );
       })}
       <ToolBtn compact={compact} label="텍스트" shortcut="T" active={tool === "text"} onClick={() => setTool("text")}><Type size={ic} /></ToolBtn>
-      <ToolBtn label="코멘트 남기기" shortcut="C" active={tool === "comment"} onClick={() => setTool(tool === "comment" ? "move" : "comment")} compact={compact}><MessageCircle size={ic} /></ToolBtn>
+      <ToolBtn label="코멘트 남기기" shortcut={COMMENT_SHORTCUT} active={tool === "comment"} onClick={() => setTool(tool === "comment" ? "move" : "comment")} compact={compact}><MessageCircle size={ic} /></ToolBtn>
       <ToolBtn compact={compact} label="작업: 명령·도구 찾기" shortcut="⌘K" onClick={onActions}><Zap size={ic} /></ToolBtn>
       <span className="w-px h-6 mx-1" style={{ background: "#e5e7eb" }} />
       <div className="flex items-center gap-0.5 rounded-lg p-0.5" style={{ background: "#f3f4f6" }} role="group" aria-label="모드">
@@ -805,7 +1020,7 @@ function Toolbar({ tool, setTool, onPlaceImage, onActions, mode, setMode, grid, 
   );
 }
 
-const SHORTCUTS = [["V", "이동"], ["H", "손 도구"], ["F", "프레임"], ["⇧S", "섹션"], ["R", "사각형"], ["O", "타원"], ["L", "선"], ["⇧L", "화살표"], ["⇧P", "연필"], ["⇧⌘K", "이미지 넣기"], ["T", "텍스트"], ["C", "코멘트"], ["⌘K", "작업(명령 찾기)"], ["⇧G", "레이아웃 그리드"], ["⇧D", "개발 모드"], ["⇧C", "코멘트 숨기기/보이기"], ["Space+드래그", "화면 이동"], ["⌘+휠", "확대·축소"], ["⇧1", "화면에 맞추기"], ["⌘Z", "실행 취소"], ["Delete", "삭제"]] as const;
+const SHORTCUTS = [["V", "이동"], ["H", "손 도구"], ["F", "프레임"], ["⇧S", "섹션"], ["R", "사각형"], ["O", "타원"], ["L", "선"], ["⇧L", "화살표"], ["⇧P", "연필"], ["⇧⌘K", "이미지 넣기"], ["T", "텍스트"], [COMMENT_SHORTCUT, "코멘트"], ["⌘K", "작업(명령 찾기)"], ["⇧G", "레이아웃 그리드"], ["⇧D", "개발 모드"], ["Space+드래그", "화면 이동"], ["⌘+휠", "확대·축소"], ["⇧1", "화면에 맞추기"], ["⌘Z", "실행 취소"], ["Delete", "삭제"]] as const;
 
 function HelpButton({ open, setOpen }: { open: boolean; setOpen: Dispatch<SetStateAction<boolean>> }) {
   return (

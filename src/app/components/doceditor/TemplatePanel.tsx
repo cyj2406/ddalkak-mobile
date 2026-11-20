@@ -43,13 +43,13 @@ export function TemplatePanel({ kind, width = 300, onPreview, onBlank, onAskAi, 
       </div>
 
       <div className="shrink-0 px-3 pt-3 pb-2">
-        <label className="flex items-center gap-2 h-10 px-3 rounded-lg" style={{ background: "#f3f4f6" }}>
+        <label className="field-pill flex items-center gap-2 h-10 px-3 rounded-lg border border-transparent" style={{ background: "#f3f4f6" }}>
           <Search size={14} color="#94a3b8" />
           <input
             value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder={{ hangul: "공문, 신청서, 기안서…", word: "보고서, 회의록, 자기소개서…", excel: "견적, 지출, 급여…", ppt: "제안서, 실적 보고, 강의…", pdf: "", video: "숏폼, 브이로그, 리뷰…", image: "할인, 카드뉴스, 썸네일…" }[kind]}
             aria-label="템플릿 검색"
-            className="flex-1 min-w-0 bg-transparent outline-none" style={{ fontSize: editorType.body, color: "#111827" }}
+            className="field-inline flex-1 min-w-0 bg-transparent outline-none" style={{ fontSize: editorType.body, color: "#111827" }}
           />
           {query && <button type="button" aria-label="검색어 지우기" onClick={() => setQuery("")}><X size={13} color="#94a3b8" /></button>}
         </label>

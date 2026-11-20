@@ -199,7 +199,7 @@ function Composer({ placeholder, members, onSubmit, onCancel, autoFocus = true, 
   return (
     <div className="relative flex items-start gap-2" style={{ padding: 12 }}>
       {leading}
-      <div className="flex-1 min-w-0 rounded-xl bg-white border border-[#e5e7eb] focus-within:border-[#a5b4fc]">
+      <div className="field-pill flex-1 min-w-0 rounded-xl bg-white border border-[#e5e7eb]">
         {images.length > 0 && (
           <div className="flex gap-2 flex-wrap" style={{ padding: "8px 8px 0" }}>
             {images.map((src, i) => (
@@ -226,7 +226,7 @@ function Composer({ placeholder, members, onSubmit, onCancel, autoFocus = true, 
           }}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addImages(e.clipboardData.files); } }}
           placeholder={placeholder}
-          className="w-full resize-none bg-transparent block"
+          className="field-inline w-full resize-none bg-transparent block"
           style={{ ...f, fontSize: editorType.large, lineHeight: "20px", color: "#111827", padding: "8px 12px 4px", outline: "none", maxHeight: 140 }}
         />
         <div className="flex items-center gap-0.5" style={{ padding: "0 4px 4px" }}>

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
-import { History, Home, MessageCircle, Pencil, Plus, Sparkles, X, LayoutGrid } from "lucide-react";
+import { History, Home, MessageCircle, Pencil, Plus, Sparkles, StickyNote, X, LayoutGrid } from "lucide-react";
 
 import { showToast } from "@/app/components/common/Toast";
 import { AiAssistantPanel, type AiRequest } from "@/app/components/editor-shell/AiAssistantPanel";
 import { CommentListPanel } from "@/app/components/editor-shell/CommentListPanel";
-import { DEMO_TEAMMATE, isUnread, type CommentAuthor } from "@/app/components/editor-shell/comments";
+import { COMMENT_SHORTCUT, DEMO_TEAMMATE, isUnread, type CommentAuthor } from "@/app/components/editor-shell/comments";
 import { EditorHeader, type ProfileMenuHandlers, type SaveState, type Viewer } from "@/app/components/editor-shell/EditorHeader";
 import { DockButtons, PanelCloseButton, SideDock } from "@/app/components/editor-shell/SideDock";
 import { VersionHistoryPanel } from "@/app/components/editor-shell/VersionHistoryPanel";
@@ -34,7 +34,8 @@ const MAX_VERSIONS = 15;
 const pushVersion = (list: Version[] | undefined, v: Version) => [...(list ?? []), v].slice(-MAX_VERSIONS);
 
 /** 디자인 파일 — 탭을 닫아도(open=false) "내 파일"에 남는다. doc 은 마지막 상태(다시 열 때 이걸로 연다). rev가 바뀌면 캔버스를 그 doc으로 다시 연다(버전 되돌리기) */
-export interface DFile { id: string; name: string; doc: Doc; open: boolean; updatedAt: number; versions?: Version[]; rev?: number }
+/** kind: board = 피그잼형 보드(2026-11-20 "새 보드"). 없으면 디자인 파일 */
+export interface DFile { id: string; name: string; doc: Doc; open: boolean; updatedAt: number; versions?: Version[]; rev?: number; kind?: "design" | "board" }
 
 const STORE_KEY = "ddalkkak.uidesign.v1";
 const DOCK_KEY = "ddalkkak.uidesign.dock";
@@ -50,7 +51,7 @@ function loadStore(): { files: DFile[]; threads: Record<string, Thread[]> } {
 let warnedQuota = false;
 function saveStore(files: DFile[], threads: Record<string, Thread[]>): boolean {
   try { localStorage.setItem(STORE_KEY, JSON.stringify({ files, threads })); return true; }
-  catch { if (!warnedQuota) { warnedQuota = true; showToast("저장 공간이 부족해 이 브라우저에 저장하지 못했어요(큰 이미지가 있으면 그래요). 열려 있는 동안은 그대로예요.", "error"); } return false; }
+  catch { if (!warnedQuota) { warnedQuota = true; showToast("저장 공간이 부족해서 저장하지 못했어요. 창을 닫기 전까지는 그대로 남아 있어요.", "error"); } return false; }
 }
 type Dock = "ai" | "comments" | "history";
 
@@ -126,9 +127,9 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, 
   const viewers: Viewer[] = someoneElse ? [{ ...me, isMe: true, activity: "이 탭" }, { ...DEMO_TEAMMATE, activity: "방금 활동" }] : [{ ...me, isMe: true, activity: "이 탭" }];
 
   const openTabs = files.filter((x) => x.open);
-  const openFile = (name: string, doc: Doc = emptyDoc()) => {
+  const openFile = (name: string, doc: Doc = emptyDoc(), kind: "design" | "board" = "design") => {
     const id = uid("file");
-    setFiles((l) => [...l, { id, name, doc, open: true, updatedAt: Date.now(), versions: [{ id: uid("v"), at: Date.now(), by: "created", doc }] }]);
+    setFiles((l) => [...l, { id, name, doc, open: true, updatedAt: Date.now(), versions: [{ id: uid("v"), at: Date.now(), by: "created", doc }], ...(kind === "board" ? { kind } : {}) }]);
     setActive(id);
     setSelection(null);
     return id;
@@ -154,12 +155,18 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, 
   const duplicateFile = (id: string) => {
     const src = files.find((x) => x.id === id);
     if (!src) return;
-    setFiles((l) => [...l, { id: uid("file"), name: `${src.name} 사본`, doc: src.doc, open: false, updatedAt: Date.now() }]);
+    setFiles((l) => [...l, { id: uid("file"), name: `${src.name} 사본`, doc: src.doc, open: false, updatedAt: Date.now(), ...(src.kind ? { kind: src.kind } : {}) }]);
     showToast("사본을 만들었어요.");
   };
   const nextUntitled = () => {
-    const n = files.filter((x) => x.name.startsWith("Untitled")).length;
+    const n = files.filter((x) => /^Untitled( \d+)?$/.test(x.name)).length;
     return n ? `Untitled ${n + 1}` : "Untitled";
+  };
+  // 새 보드: 이름 "Untitled board", 바탕은 따뜻한 밝은 회색(점 배경이 잘 보이게)
+  const newBoard = () => {
+    const n = files.filter((x) => /^Untitled board( \d+)?$/.test(x.name)).length;
+    const doc = emptyDoc();
+    openFile(n ? `Untitled board ${n + 1}` : "Untitled board", { ...doc, pages: doc.pages.map((pg) => ({ ...pg, bg: "#F5F5F3" })) }, "board");
   };
   const docCache = useRef<Record<string, (d: Doc) => void>>({});
   // 고칠 때마다 버전: 마지막 버전이 내가 2분 안에 고친 것이면 그 버전을 갱신, 아니면 새 버전
@@ -192,7 +199,7 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, 
       return { ...x, doc: v.doc, rev: (x.rev ?? 0) + 1, updatedAt: Date.now(), versions: before };
     }));
     setVersionSel(null);
-    showToast("이 버전으로 되돌렸어요. 되돌리기 전 상태는 버전 기록에 남아 있어요.");
+    showToast("이 버전으로 되돌렸어요. 이전 상태는 버전 기록에 남아 있어요.");
   };
 
   const setThreadsFor = useCallback((fileId: string) => (u: SetStateAction<Thread[]>) =>
@@ -215,8 +222,8 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, 
   // 오른쪽 패널 토글 — 홈 탭에선 파일 단위 기능(코멘트)을 숨기고 AI만. 버전 기록은 구현 전이라 버튼을 두지 않는다(빈 패널을 여는 버튼 = 동작 없는 버튼).
   const dockTabs = [
     { id: "ai", label: "딸깍 AI", hint: `딸깍 AI 열기/닫기 (${AI_SHORTCUT})`, icon: Sparkles, dot: aiDot && dock !== "ai", emphasized: true },
-    ...(activeFile ? [{ id: "history", label: "버전 기록", hint: "버전 기록: 이전 상태 보기·되돌리기", icon: History }] : []),
-    ...(activeFile ? [{ id: "comments", label: "코멘트 목록", hint: unread ? `코멘트 목록 (읽지 않음 ${unread})` : "코멘트 목록 (남기기는 툴바 말풍선 · C)", icon: MessageCircle, badge: unread }] : []),
+    ...(activeFile ? [{ id: "history", label: "버전 기록", hint: "버전 기록: 이전 상태를 보고 되돌려요", icon: History }] : []),
+    ...(activeFile ? [{ id: "comments", label: "코멘트 목록", hint: unread ? `코멘트 (${COMMENT_SHORTCUT}) · 읽지 않음 ${unread}` : `코멘트 (${COMMENT_SHORTCUT}): 캔버스를 클릭해 남기기 · 목록`, icon: MessageCircle, badge: unread }] : []),
   ];
 
   const aiPanel = (
@@ -307,7 +314,7 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, 
         </button></IconTooltip>
         {openTabs.map((x) => (
           <div key={x.id} role="tab" aria-selected={active === x.id} className="group flex items-center gap-2 pl-3 pr-2 cursor-default" style={{ minWidth: 120, maxWidth: 200, background: active === x.id ? "#fff" : undefined, borderRight: "1px solid #e2e2e5" }} onClick={() => setActive(x.id)}>
-            <Pencil size={11} color={EDITOR_ACCENT} className="shrink-0" />
+            {x.kind === "board" ? <StickyNote size={12} color="#8b5cf6" className="shrink-0" aria-label="보드" /> : <Pencil size={11} color={EDITOR_ACCENT} className="shrink-0" />}
             <span className="truncate flex-1" style={{ fontSize: editorType.body, color: "#111827" }}>{x.name}</span>
             <IconTooltip label="탭 닫기"><button type="button" aria-label={`${x.name} 탭 닫기`} onClick={(e) => { e.stopPropagation(); closeFile(x.id); }} className="size-5 flex items-center justify-center rounded hover:bg-black/[0.06]"><X size={11} color="#6b7280" /></button></IconTooltip>
           </div>
@@ -325,6 +332,7 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, 
             onDuplicate={duplicateFile}
             onDelete={deleteFile}
             onNewFile={() => openFile(nextUntitled())}
+            onNewBoard={newBoard}
             onOpenImage={(name, url, w, h) => {
               const s = Math.min(1, 1200 / Math.max(w, h));
               const frame = makeNode("frame", null, 0, 0, Math.round(w * s), Math.round(h * s), { name, fill: "#FFFFFF", imageUrl: url });
@@ -337,6 +345,7 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, 
           <DesignFile
             key={`${x.id}:${x.rev ?? 0}`}
             initialDoc={x.doc}
+            kind={x.kind ?? "design"}
             onDocChange={onDocChange(x.id)}
             shell={{
               newFile: () => openFile(nextUntitled()),
@@ -353,7 +362,7 @@ export function UiDesignEditor({ onBack, onBellClick, onSwitchApp, profileMenu, 
             threads={threadsByFile[x.id] ?? []}
             setThreads={threadsSetter(x.id)}
             pinsHidden={pinsHidden}
-            togglePins={() => setPinsHidden((v) => { showToast(v ? "코멘트를 다시 보여요." : "캔버스에서 코멘트를 숨겼어요. ⇧C로 다시 보여요."); return !v; })}
+            togglePins={() => setPinsHidden((v) => { showToast(v ? "코멘트를 다시 보여요." : "캔버스에서 코멘트를 숨겼어요. 코멘트 목록의 눈 아이콘으로 다시 보여요."); return !v; })}
             onCommentMode={() => setDock("comments")}
             registerApi={register(x.id)}
             onSelection={onSelection}

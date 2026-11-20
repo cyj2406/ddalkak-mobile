@@ -4463,7 +4463,7 @@ function WsResult({ category, templateName, fileType }: {
       {/* 완료 안내 텍스트 (글자가 쭉 이어지는 형식) */}
       <div className="px-1">
         <p style={{ ...f, fontWeight: 400, fontSize: 14.5, color: "#0a0a0a", lineHeight: 1.7 }}>
-          <b style={{ fontWeight: 700 }}>'{templateName}'</b> 제작이 완료되었습니다.
+          <b style={{ fontWeight: 700 }}>'{templateName}'</b> 제작을 마쳤어요.
         </p>
         <p style={{ ...f, fontWeight: 400, fontSize: 14, color: "#374151", lineHeight: 1.75, marginTop: 10 }}>{r.intro}</p>
 
@@ -5406,7 +5406,7 @@ export default function App() {
   const switchApp = (appId: string) => {
     const kinds: Record<string, EditorKind> = { word: "word", hangul: "hangul", excel: "excel", ppt: "ppt", pdf: "pdf", image: "image", video: "video", uidesign: "uidesign" };
     const k = kinds[appId];
-    if (!k) { showToast("이 도구는 아직 이 화면에서 열 수 없어요(준비 중)."); return; }
+    if (!k) { showToast("이 도구는 아직 준비 중이에요."); return; }
     setUiDesignOpen(false);
     openEditor(k);
   };

@@ -36,7 +36,7 @@ export function PanelResizeHandle({ side, panel, label }: { side: "left" | "righ
     <div
       role="separator" aria-orientation="vertical" aria-label={label} tabIndex={0}
       aria-valuenow={panel.width} aria-valuemin={panel.min} aria-valuemax={panel.max}
-      title="끌어서 너비 조절 · 두 번 누르면 기본 너비"
+      title="끌어서 너비 조절, 두 번 누르면 기본 너비"
       onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}
       onPointerDown={(e) => {
         e.preventDefault();

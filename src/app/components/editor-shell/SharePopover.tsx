@@ -29,15 +29,15 @@ export function SharePopover({ fileName, accent, onClose }: { fileName: string; 
     <div ref={ref} className="absolute right-0 top-10 bg-white rounded-xl z-50" style={{ ...f, width: 340, padding: 16, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }} role="dialog" aria-label="공유">
       <p style={{ fontSize: editorType.large, fontWeight: 700, color: "#111827" }}>“{fileName}” 공유</p>
       <div className="flex gap-2 mt-3">
-        <div className="flex-1 min-w-0 flex items-center rounded-lg border border-[#e5e7eb] focus-within:border-[#4f7bff]">
-          <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.stopPropagation()} placeholder="이메일로 초대" className="flex-1 min-w-0 px-3 h-8 outline-none bg-transparent" style={{ fontSize: editorType.large }} />
+        <div className="field-pill flex-1 min-w-0 flex items-center rounded-lg border border-[#e5e7eb]">
+          <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.stopPropagation()} placeholder="이메일로 초대" className="field-inline flex-1 min-w-0 px-3 h-8 outline-none bg-transparent" style={{ fontSize: editorType.large }} />
           <select value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="h-8 pr-1 bg-transparent outline-none" style={{ fontSize: editorType.caption, color: "#475569" }} aria-label="권한">
             <option>편집 가능</option><option>코멘트 가능</option><option>보기 가능</option>
           </select>
         </div>
         <button
           type="button" disabled={!valid}
-          onClick={() => { setInvited((l) => [...l, { email: email.trim(), role }]); setEmail(""); showToast("초대를 보냈어요. (예시라 실제 메일은 가지 않아요)"); }}
+          onClick={() => { setInvited((l) => [...l, { email: email.trim(), role }]); setEmail(""); showToast("초대를 보냈어요. 예시라서 실제 메일은 가지 않아요."); }}
           className="rounded-lg px-3 h-8" style={{ fontSize: editorType.label, fontWeight: 700, color: "#fff", background: valid ? accent : "#cbd5e1" }}
         >
           초대

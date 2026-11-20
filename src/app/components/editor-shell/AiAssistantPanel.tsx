@@ -192,7 +192,7 @@ export function AiAssistantPanel({
     if (!files) return;
     const list = Array.from(files);
     const tooBig = list.filter((x) => x.size > MAX_FILE);
-    if (tooBig.length) showToast(`20MB가 넘는 파일은 올릴 수 없어요: ${tooBig[0].name}`, "error");
+    if (tooBig.length) showToast(`${tooBig[0].name} 파일은 20MB가 넘어서 올릴 수 없어요.`, "error");
     const ok = list.filter((x) => x.size <= MAX_FILE);
     setAttachments((a) => {
       const room = MAX_ATTACH - a.length;
@@ -206,7 +206,7 @@ export function AiAssistantPanel({
     let room = PROJECT_LIMIT - used;
     const added: (AiAttachment & { at: number })[] = [];
     for (const file of Array.from(files)) {
-      if (file.size > room) { showToast("프로젝트 용량(100MB)을 넘어요.", "error"); break; }
+      if (file.size > room) { showToast("프로젝트 용량 100MB를 넘어서 올릴 수 없어요.", "error"); break; }
       room -= file.size;
       added.push({ ...toAttachment(file), at: Date.now() });
     }
@@ -244,8 +244,13 @@ export function AiAssistantPanel({
       <div ref={listRef} className="flex-1 overflow-y-auto ui-scroll" style={{ padding: "12px 16px 16px" }}>
         {msgs.length === 0 ? (
           <div>
-            <p style={{ fontSize: editorType.large, lineHeight: "22px", color: "#4b5563", wordBreak: "keep-all" }}>하고 싶은 작업을 말로 적어 주세요. 예: {example}</p>
-            <span className="inline-block mt-2 rounded px-2 py-0.5" style={{ fontSize: editorType.caption, color: "#6b7280", background: "#f3f4f6" }}>사용할 수 있는 명령 {commandCount}개</span>
+            {/* 빈 화면(2026-11-20, 사용자 "사용자 친화적으로"): Canva AI · ChatGPT · Claude 첫 화면처럼 인사 한 줄 + 할 수 있는 일 한 줄 + 바로 누를 예시.
+                예전 "예: “390×844 모바일 홈 화면 프레임…”"(기술 용어)와 "사용할 수 있는 명령 634개"(뜻 없는 숫자)는 AI를 잘 모르는 사람에게 부담이라 뺐다. */}
+            <div className="flex items-center gap-2" style={{ paddingTop: 4 }}>
+              <span className="size-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "#eef2ff" }}><Sparkles size={16} color={color.brand} /></span>
+              <p style={{ fontSize: editorType.chat, lineHeight: "24px", fontWeight: 700, color: "#111827" }}>무엇을 도와드릴까요?</p>
+            </div>
+            <p style={{ fontSize: editorType.body, lineHeight: "20px", color: "#64748b", marginTop: 8, wordBreak: "keep-all" }}>하고 싶은 일을 평소 말하듯 적으면 딸깍 AI가 바로 해 드려요. 아래 예시를 눌러 시작해도 돼요.</p>
             {brief && <BriefCard key={`${brief.key ?? "b"}-${briefForced ?? 0}`} brief={brief} defaultOpen={briefForced !== null} onSend={(text) => { setBriefForced(null); send(text); }} onClose={() => setBriefForced(null)} />}
             <Suggestions items={suggestions} onPick={(s) => send(s)} />
           </div>
@@ -305,7 +310,7 @@ export function AiAssistantPanel({
             onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
             placeholder={running ? (queue.length ? "더 적으면 대기열 뒤에 붙어요" : "다음에 할 일을 적으면 지금 일이 끝난 뒤 보내요") : "무엇을 할까요?"}
             aria-label="딸깍 AI에게 요청"
-            className="w-full resize-none bg-transparent"
+            className="field-inline w-full resize-none bg-transparent"
             style={{ ...f, fontSize: editorType.chat, lineHeight: "24px", color: "#111827", outline: "none", boxShadow: "none" }}
           />
           <div className="relative flex items-center gap-1 mt-0.5" data-ai-menu>
@@ -332,7 +337,7 @@ export function AiAssistantPanel({
                     이름은 짧게, 차이는 아래 한 줄 설명으로 */}
                 <button type="button" className={menuItem} style={{ alignItems: "flex-start" }} onClick={() => { setMenu(null); fileRef.current?.click(); }}>
                   <Paperclip size={16} color="#475569" className="mt-0.5 shrink-0" />
-                  <span className="min-w-0 flex-1"><span className="block" style={{ fontSize: editorType.body, color: "#111827" }}>파일 올리기</span><span className="block" style={{ fontSize: editorType.caption, color: "#94a3b8" }}>이번 요청에만 붙여요 · 이미지, PDF, .fig</span></span>
+                  <span className="min-w-0 flex-1"><span className="block" style={{ fontSize: editorType.body, color: "#111827" }}>파일 올리기</span><span className="block" style={{ fontSize: editorType.caption, color: "#94a3b8" }}>이번 요청에만 붙여요 · 파일당 20MB</span></span>
                 </button>
                 <button type="button" className={menuItem} style={{ alignItems: "flex-start" }} onClick={() => { setMenu(null); projFileRef.current?.click(); }}>
                   <FolderPlus size={16} color="#475569" className="mt-0.5 shrink-0" />
@@ -394,7 +399,7 @@ export function AiAssistantPanel({
                   <>
                     <div className="h-px my-1" style={{ background: "#f1f5f9" }} />
                     <button type="button" className={menuItem} onClick={() => { setMenu(null); onManageModels(); }}>
-                      <span className="flex-1" style={{ fontSize: editorType.label, fontWeight: 600, color: color.brand }}>{ownModels(models).length ? "AI 연결 관리" : "Claude·ChatGPT 연결하기"}</span><ChevronRight size={13} color={color.brand} />
+                      <span className="flex-1" style={{ fontSize: editorType.label, fontWeight: 600, color: color.brand }}>{ownModels(models).length ? "AI 연결 관리" : "Claude, ChatGPT 연결하기"}</span><ChevronRight size={13} color={color.brand} />
                     </button>
                   </>
                 )}
@@ -402,7 +407,7 @@ export function AiAssistantPanel({
             )}
           </div>
         </div>
-        <input ref={fileRef} type="file" multiple accept="image/*,application/pdf,.fig,.figcraft" className="sr-only" tabIndex={-1} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+        <input ref={fileRef} type="file" multiple className="sr-only" tabIndex={-1} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
       </div>
 
       {projectOpen && (
@@ -413,7 +418,7 @@ export function AiAssistantPanel({
           onClose={() => setProjectOpen(false)}
         />
       )}
-      <input ref={projFileRef} type="file" multiple accept="image/*,application/pdf,.fig,.figcraft" className="sr-only" tabIndex={-1} onChange={(e) => { const n = e.target.files?.length ?? 0; addProjectFiles(e.target.files); e.target.value = ""; if (n) setProjectOpen(true); }} />
+      <input ref={projFileRef} type="file" multiple className="sr-only" tabIndex={-1} onChange={(e) => { const n = e.target.files?.length ?? 0; addProjectFiles(e.target.files); e.target.value = ""; if (n) setProjectOpen(true); }} />
     </div>
   );
 }
@@ -543,14 +548,17 @@ function BriefCard({ brief, onSend, defaultOpen = false, onClose }: { brief: Bri
   );
 }
 
+/** 예시 요청 — 패널 폭을 꽉 채운 줄(누를 곳이 넓고 길이가 들쭉날쭉하지 않게). 왼쪽 ✨, 오른쪽 ↑(누르면 바로 보냄) */
 function Suggestions({ items, onPick }: { items: string[]; onPick: (s: string) => void }) {
   if (!items.length) return null;
   return (
-    <div className="flex flex-col gap-2 mt-4">
-      {<p style={{ fontSize: editorType.caption, fontWeight: 600, color: "#64748b" }}>이렇게 시켜 보세요</p>}
+    <div className="flex flex-col gap-2" style={{ marginTop: 20 }}>
+      <p style={{ fontSize: editorType.caption, fontWeight: 600, color: "#64748b" }}>이렇게 시작해 보세요</p>
       {items.map((s) => (
-        <button key={s} type="button" onClick={() => onPick(s)} className="self-start text-left rounded-lg px-3 py-2 hover:bg-[#eef2ff] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: editorType.label, color: "#334155", border: "1px solid #e5e7eb", wordBreak: "keep-all" }}>
-          {s}
+        <button key={s} type="button" onClick={() => onPick(s)} className="group w-full min-h-12 flex items-center gap-3 text-left rounded-xl px-3 py-2.5 hover:bg-[#f5f7ff] hover:border-[#c7d2fe] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff] transition-colors" style={{ fontSize: editorType.body, lineHeight: "20px", color: "#111827", border: "1px solid #e5e7eb", wordBreak: "keep-all" }}>
+          <Sparkles size={16} className="shrink-0 text-[#94a3b8] group-hover:text-[#4f7bff]" />
+          <span className="flex-1 min-w-0">{s}</span>
+          <ArrowUp size={16} className="shrink-0 text-[#4f7bff] opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden />
         </button>
       ))}
     </div>
@@ -686,7 +694,7 @@ function ProjectSheet({ instructions, setInstructions, files, onUpload, onRemove
         </div>
         <p style={{ fontSize: editorType.caption, color: "#94a3b8", marginTop: 4 }}>{fmtSize(used)} / 100MB 사용</p>
         {files.length === 0 ? (
-          <p style={{ fontSize: editorType.caption, lineHeight: "18px", color: "#94a3b8", padding: "16px 0", wordBreak: "keep-all" }}>브랜드 가이드 PDF, 로고, 참고 화면 캡처, 디자인 시스템 .fig 등을 올려 두세요.</p>
+          <p style={{ fontSize: editorType.caption, lineHeight: "18px", color: "#94a3b8", padding: "16px 0", wordBreak: "keep-all" }}>브랜드 가이드, 로고, 참고 문서나 이미지처럼 작업할 때마다 참고할 파일을 올려 두세요.</p>
         ) : (
           <ul className="mt-2 flex flex-col">
             {files.map((x) => (
