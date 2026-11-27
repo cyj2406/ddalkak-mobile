@@ -496,20 +496,38 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu,
     return () => { window.clearInterval(t); document.removeEventListener("click", click, true); document.removeEventListener("keydown", key, true); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [starter, kind]);
-  const finishStarter = (done: boolean) => {
+  // shareTip: 3단계 [끝내기]도 마무리 말풍선을 띄운다(2026-11-27). 버튼 이름이 "끝내기"라 다 했다고 여기고 누르는 사람이 많다.
+  // 머리줄 건너뛰기 · Esc · 2단계에서 끝낸 경우만 안 띄운다
+  const finishStarter = (done: boolean, shareTipAnyway = false) => {
     track(done ? "starter_complete" : "starter_skip", { step: getStarterPhase() === "template" ? 2 : 3 });
     setStarterPhase(null); markHintSeen("templates"); markHintSeen("ai");
-    if (done) showToast("준비 끝! 함께 고치려면 오른쪽 위 공유를 눌러요.");
+    // 끝까지 한 사람에게만 공유 마무리 말풍선(2026-11-27). 공유는 받는 사람이 있어야 해 볼 수 있어 단계로 넣지 않고,
+    // 결과물이 막 생긴 순간에 자리만 알려 준다. AI가 쓴 걸 먼저 보도록 잠깐 뒤에 띄운다
+    if (done || shareTipAnyway) window.setTimeout(() => { if (getStarterPhase() === null) { setStarterPhase("share"); track("starter_share_tip_view"); } }, 900);
   };
+  const shareTip = kind === "hangul" && starter === "share";
+  const closeShareTip = useCallback((via: string) => { if (getStarterPhase() === "share") { setStarterPhase(null); track("starter_share_tip_close", { via }); } }, []);
+  // 상단 [공유]를 누르면 말풍선도 닫는다(공유 창은 그대로 열린다)
+  useEffect(() => {
+    if (!shareTip) return;
+    const click = (e: MouseEvent) => { if ((e.target as Element)?.closest?.('[data-onboarding="share"]')) closeShareTip("share"); };
+    document.addEventListener("click", click, true);
+    return () => document.removeEventListener("click", click, true);
+  }, [shareTip, closeShareTip]);
   // AI 결과가 문서에 들어가면 끝
   useEffect(() => { if ((getStarterPhase() === "ai" || getStarterPhase() === "ai-wait") && kind === "hangul" && active.ai) finishStarter(true); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [active.ai, kind]);
   // 편집기를 닫으면 튜토리얼도 끝
-  useEffect(() => () => { const p = getStarterPhase(); if (p === "template" || p === "ai" || p === "ai-wait") setStarterPhase(null); }, []);
+  useEffect(() => () => { const p = getStarterPhase(); if (p === "template" || p === "ai" || p === "ai-wait" || p === "share") setStarterPhase(null); }, []);
   // 건너뛴 사람용 파란 점(튜토리얼 중에는 숨김)
   const tplHint = useHintVisible("templates") && !tour && kind !== "pdf";
   const aiHint = useHintVisible("ai") && !tour;
   const coachBtn = { height: 36, padding: "0 14px", fontSize: 13 } as const;
-  const starterCoach = !tour || booting ? null : starter === "template" ? (!preview && (
+  const starterCoach = shareTip ? (
+    <Coachmark tip target='[data-onboarding="share"]' placement="bottom" step={STARTER_TOTAL} total={STARTER_TOTAL}
+      title="함께 고치려면 공유해요" body="링크를 보내면 받는 사람이 문서에 바로 코멘트를 남길 수 있어요. 파일을 주고받지 않아도 돼요."
+      onSkip={() => closeShareTip("esc")}
+      actions={<Button variant="secondary" size="md" onClick={() => closeShareTip("ok")} style={coachBtn}>확인</Button>} />
+  ) : !tour || booting ? null : starter === "template" ? (!preview && (
     <Coachmark target='[data-onboarding="tpl-panel"]' placement="right" step={2} total={STARTER_TOTAL}
       pulse='[data-onboarding="tpl-panel"] button[aria-label$="미리보기"] > span:first-child'
       title="필요한 양식은 여기서 바로 써요" body="공문, 신청서처럼 정해진 양식을 누르면 문서에 바로 들어가요. 하나 눌러 볼까요?"
@@ -520,7 +538,7 @@ export function DocEditor({ kind, onBack, onBellClick, onSwitchApp, profileMenu,
       pulse='[data-onboarding="ai-composer"] button[aria-label="보내기"]'
       title="말로만 해도 채워 줘요" body="딸깍 AI에게 하고 싶은 걸 적으면 문서를 대신 써 줘요. 보내기를 눌러 보세요."
       onSkip={() => finishStarter(false)}
-      actions={<Button variant="secondary" size="md" onClick={() => finishStarter(false)} style={coachBtn}>끝내기</Button>} />
+      actions={<Button variant="secondary" size="md" onClick={() => finishStarter(false, true)} style={coachBtn}>끝내기</Button>} />
   ) : null;
   const pdfOpen = kind === "pdf" && !!active.pdfName && !!pdfUrls.current[activeId];
   const dockTabs = [

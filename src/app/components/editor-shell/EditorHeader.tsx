@@ -198,6 +198,7 @@ export function EditorHeader({
             <button
               type="button"
               aria-expanded={shareOpen}
+              data-onboarding="share"
               onClick={() => setShareOpen((v) => !v)}
               className="h-10 px-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[#4f7bff]"
               style={exportPrimary ? { background: "#fff", color: "#111827", fontSize: editorType.body, fontWeight: 600, boxShadow: "inset 0 0 0 1px #e2e8f0" } : { background: accent, color: "#fff", fontSize: editorType.body, fontWeight: 600 }}
@@ -239,6 +240,7 @@ export function EditorHeader({
             <button
               type="button"
               aria-expanded={shareOpen}
+              data-onboarding="share"
               onClick={() => setShareOpen((v) => !v)}
               className="h-10 px-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[#4f7bff]"
               style={exportPrimary ? { background: "#fff", color: "#111827", fontSize: editorType.body, fontWeight: 600, boxShadow: "inset 0 0 0 1px #e2e8f0" } : { background: accent, color: "#fff", fontSize: editorType.body, fontWeight: 600 }}
