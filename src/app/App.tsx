@@ -1,28 +1,82 @@
-import React, { useState, useRef, useEffect } from "react";
-import { HelpCircle, Settings as SettingsIcon, Users, Mail, LogOut, Palette, Bell, Brain, Coins, Monitor, Sun, Moon, RefreshCw, FileText, FileVideo, Compass, Image as ImageIcon, Download, X as XIcon, ChevronDown, Play, Volume2, Maximize2, BookOpen } from "lucide-react";
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Pin, PinOff, MoreHorizontal, Pencil, Trash2, ChevronRight as ChevronRightIcon, Clapperboard, FilePen, Frame as FrameIcon, MessageSquare, Presentation, type LucideIcon, Sparkles as SparklesIcon, HelpCircle, Settings as SettingsIcon, UserRound, Users, Mail, LogOut, Palette, Bell, Building2, Plug, Brain, Coins, CreditCard, Monitor, Sun, Moon, FileText, FileVideo, FileSpreadsheet, FileType2, Compass, Image as ImageIcon, X as XIcon, Play, Volume2, Maximize2, Minimize2, BookOpen, Search, Plus, Upload, Check } from "lucide-react";
 
 // ── 공통 에셋 ──────────────────────────────────────────────────────────────────
 import svgPaths from "@/imports/새대화딸깍/svg-yz49hawimu";
 import svgCard from "@/imports/Container/svg-n3rzud15nf";
 // Frame svg paths are identical to Container's — svgCard covers all keys
 import imgImageNet from "@/imports/새대화딸깍/70598a9173139973c519fbc9c881094e41ef9297.png";
-import imgUserAvatar from "@/imports/새대화딸깍/ec4bf4c83826b512a10ccb46952ef28cdb24b8d8.png";
+import imgLogoMark from "@/assets/brand/logo-mark.png";
 
+import TabletEditorShell from "@/app/components/viewer/TabletEditorShell";
+import TabletVideoResultViewer from "@/app/components/viewer/TabletVideoResultViewer";
+import TabletDocEditorViewer from "@/app/components/viewer/TabletDocEditorViewer";
+import TabletMiniEditor from "@/app/components/viewer/TabletMiniEditor";
+import TabletResultViewer from "@/app/components/viewer/TabletResultViewer";
+import {
+  CHAT_COL_BASIS, EDITOR_MIN_W, SPLIT_ANIM_MS, SPLIT_EASE, SplitViewContext,
+} from "@/app/components/viewer/splitView";
+import {
+  FILE_TYPE_META, fileNameFor, resolveFileType,
+  type ViewerFileType,
+} from "@/app/components/viewer/viewerChrome";
+import { StarterHome } from "@/app/components/onboarding/StarterHome";
 import { MobileEditorNotice } from "@/app/components/viewer/MobileEditorNotice";
 import { ScrollableChips } from "@/app/components/common/ScrollableChips";
+import { Button } from "@/app/components/common/Button";
+import { ToastHost, showToast } from "@/app/components/common/Toast";
+import { IconButton } from "@/app/components/common/IconButton";
+import { useFocusTrap } from "@/app/components/common/useFocusTrap";
+import ClampedText from "@/app/components/common/ClampedText";
+import { COMPOSER_PLACEHOLDER } from "@/app/copy";
+import { color, controlHeight, f, motion, radius, shadow, SUBTITLE_COLOR, typography } from "@/app/styleTokens";
+import FormFillDesktop from "@/app/components/formfill/FormFillDesktop";
+import RecommendedCarousel from "@/app/components/home/RecommendedCarousel";
+import HomeSearch from "@/app/components/home/HomeSearch";
+import { EditorQuickLinks, type EditorKind } from "@/app/components/home/EditorQuickLinks";
+import { HomeB } from "@/app/components/home/HomeB";
+import { MyWorkScreen as MyWorkList, PINS_EVENT } from "@/app/components/mywork/MyWorkScreen";
+import { EDITOR_APPS, EDITOR_GROUPS } from "@/app/components/editor-shell/apps";
+import SearchResultsScreen from "@/app/components/home/SearchResultsScreen";
+import AllTemplatesScreen from "@/app/components/home/AllTemplatesScreen";
+import CardNewsEditorScreen from "@/app/components/home/CardNewsEditorScreen";
+import RequestHelpScreen, { type RequestHandoff } from "@/app/components/home/RequestHelpScreen";
+import { RequestCardsPanel } from "@/app/components/workspace/RequestCardsPanel";
+import { getTaskById, type TaskTemplate } from "@/app/data/tasks";
+// [formfill 임시] ?formfill=1 확인용. 컴포넌트 단품 확인 화면이라 3단 레이아웃과 별개로 남겨둔다.
+import FormFillPlayground from "@/app/components/formfill/__dev__/FormFillPlayground";
+import { useCreditBalance } from "@/app/state/creditBalance";
+import { findPlan, useSubscription } from "@/app/state/subscription";
+import { PricingPage, type PricingTab } from "@/app/components/pricing/PricingPage";
+import { SubscriptionCompletePage } from "@/app/components/pricing/SubscriptionCompletePage";
+import { SettingsCreditTab } from "@/app/components/settings/SettingsCreditTab";
+import { AiConnectionSettings } from "@/app/components/settings/AiConnectionSettings";
+import { CompanySettings } from "@/app/components/settings/CompanySettings";
+import { OrgSettings } from "@/app/components/settings/OrgSettings";
+import { SettingsSectionHead as KitSectionHead } from "@/app/components/settings/SettingsKit";
+import { readRecentEditorFiles, renameEditorFile, deleteEditorFile, readChatOverrides, renameChat, hideChat, FILES_EVENT, type RecentEditorFile } from "@/app/state/recentEditorFiles";
+import { SettingsBillingTab } from "@/app/components/settings/SettingsBillingTab";
+import { MyPage } from "@/app/components/mypage/MyPage";
+import { ProfileMenuButton } from "@/app/components/account/ProfileMenuButton";
+import { UiDesignEditor } from "@/app/components/uidesign/UiDesignEditor";
+import { DocEditor } from "@/app/components/doceditor/DocEditor";
+import type { DocKind } from "@/app/components/doceditor/docTemplates";
+import { ProfileAvatar } from "@/app/components/mypage/ProfileAvatar";
+import { useProfile } from "@/app/state/profile";
 
 
 // ─── 타입 ──────────────────────────────────────────────────────────────────────
-type Screen = "home" | "image-ai" | "landing-ai" | "forms-ai" | "docs-ai" | "audio-ai" | "ppt-ai" | "video-ai" | "favorites" | "mywork" | "credit-history" | "notifications-all";
-type WorkspaceCategory = "docs" | "ppt" | "video" | "landing" | "image" | "detail";
+type Screen = "home" | "templates" | "cardnews-editor" | "image-ai" | "landing-ai" | "forms-ai" | "forms-fill" | "docs-ai" | "audio-ai" | "ppt-ai" | "video-ai" | "favorites" | "mywork" | "notifications-all" | "search" | "request-help" | "pricing" | "subscription-complete" | "mypage";
+export type WorkspaceCategory = "docs" | "ppt" | "video" | "landing" | "image" | "detail";
 const WS_LABEL: Record<WorkspaceCategory, string> = { docs: "문서", ppt: "PPT", video: "영상", landing: "랜딩페이지", image: "이미지", detail: "상세페이지" };
 const WS_COLOR: Record<WorkspaceCategory, string> = { docs: "#3B82F6", ppt: "#8B5CF6", video: "#EF4444", landing: "#22C55E", image: "#F59E0B", detail: "#EC4899" };
 
 // ─── 아이콘 ────────────────────────────────────────────────────────────────────
 const P = (props: React.SVGProps<SVGPathElement>) => <path strokeLinecap="round" strokeLinejoin="round" {...props} />;
 
-function IconMenu() {
-  return <svg width="18" height="18" fill="none" viewBox="0 0 18 18"><P d="M3 3.75H15" stroke="#0A0A0A" strokeWidth="1.5" /><P d="M3 9H15" stroke="#0A0A0A" strokeWidth="1.5" /><P d="M3 14.25H15" stroke="#0A0A0A" strokeWidth="1.5" /></svg>;
+function IconMenu({ className }: { className?: string } = {}) {
+  return <svg className={className} width="18" height="18" fill="none" viewBox="0 0 18 18"><P d="M3 3.75H15" stroke="#0A0A0A" strokeWidth="1.5" /><P d="M3 9H15" stroke="#0A0A0A" strokeWidth="1.5" /><P d="M3 14.25H15" stroke="#0A0A0A" strokeWidth="1.5" /></svg>;
 }
 function IconClose() {
   return <svg width="18" height="18" fill="none" viewBox="0 0 18 18"><P d="M4 4L14 14" stroke="#0A0A0A" strokeWidth="1.5" /><P d="M14 4L4 14" stroke="#0A0A0A" strokeWidth="1.5" /></svg>;
@@ -30,29 +84,34 @@ function IconClose() {
 function IconChevronLeft() {
   return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d="M12.5 15L7.5 10L12.5 5" stroke="#0A0A0A" strokeWidth="1.5" /></svg>;
 }
-function IconBell() {
-  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p1c3efea0} stroke="#737373" strokeWidth="1.5" /><P d={svgPaths.p25877f40} stroke="#737373" strokeWidth="1.5" /></svg>;
+function IconBell({ size = 20 }: { size?: number } = {}) {
+  return <svg width={size} height={size} fill="none" viewBox="0 0 20 20"><P d={svgPaths.p1c3efea0} stroke={color.text.secondary} strokeWidth="1.5" /><P d={svgPaths.p25877f40} stroke={color.text.secondary} strokeWidth="1.5" /></svg>;
 }
+// 사이드바 메뉴 아이콘은 상태(비활성/호버/활성)에 따라 색이 바뀌므로 currentColor 를 쓴다.
+// 다른 곳에서 쓸 때는 감싸는 요소에 color 를 지정하면 된다.
 function IconHome() {
-  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p275d2400} stroke="#1E293B" strokeWidth="1.66667" /><P d={svgPaths.p1db6d780} stroke="#1E293B" strokeWidth="1.66667" /></svg>;
+  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p275d2400} stroke="currentColor" strokeWidth="1.66667" /><P d={svgPaths.p1db6d780} stroke="currentColor" strokeWidth="1.66667" /></svg>;
 }
 function IconHomeBlue() {
-  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p275d2400} stroke="#155DFC" strokeWidth="1.66667" /><P d={svgPaths.p1db6d780} stroke="#155DFC" strokeWidth="1.66667" /></svg>;
+  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p275d2400} stroke="#4F7BFF" strokeWidth="1.66667" /><P d={svgPaths.p1db6d780} stroke="#4F7BFF" strokeWidth="1.66667" /></svg>;
 }
 function IconWork() {
-  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p178dcc00} stroke="#1E293B" strokeWidth="1.66667" /></svg>;
+  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p178dcc00} stroke="currentColor" strokeWidth="1.66667" /></svg>;
 }
 function IconWorkBlue() {
   return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p178dcc00} stroke="#4F7BFF" strokeWidth="1.66667" /></svg>;
 }
 function IconStar() {
-  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.pa6d0980} stroke="#1E293B" strokeWidth="1.66667" /></svg>;
+  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.pa6d0980} stroke="currentColor" strokeWidth="1.66667" /></svg>;
 }
 function IconStarBlue() {
   return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.pa6d0980} stroke="#4F7BFF" strokeWidth="1.66667" /></svg>;
 }
 function IconFileDoc() {
   return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p232b1d80} stroke="#90A1B9" strokeWidth="1.66667" /><P d={svgPaths.p3abdf300} stroke="#90A1B9" strokeWidth="1.66667" /><P d="M8.33333 7.5H6.66667" stroke="#90A1B9" strokeWidth="1.66667" /><P d="M13.3333 10.8333H6.66667" stroke="#90A1B9" strokeWidth="1.66667" /><P d="M13.3333 14.1667H6.66667" stroke="#90A1B9" strokeWidth="1.66667" /></svg>;
+}
+function IconFileDocBlue() {
+  return <svg width="20" height="20" fill="none" viewBox="0 0 20 20"><P d={svgPaths.p232b1d80} stroke="#4F7BFF" strokeWidth="1.66667" /><P d={svgPaths.p3abdf300} stroke="#4F7BFF" strokeWidth="1.66667" /><P d="M8.33333 7.5H6.66667" stroke="#4F7BFF" strokeWidth="1.66667" /><P d="M13.3333 10.8333H6.66667" stroke="#4F7BFF" strokeWidth="1.66667" /><P d="M13.3333 14.1667H6.66667" stroke="#4F7BFF" strokeWidth="1.66667" /></svg>;
 }
 function IconSettings() {
   return <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><P d={svgPaths.p36e45a00} stroke="#737373" strokeWidth="1.33333" /><P d={svgPaths.p150f5b00} stroke="#737373" strokeWidth="1.33333" /><P d={svgPaths.p2d6e5280} stroke="#737373" strokeWidth="1.33333" /></svg>;
@@ -73,10 +132,15 @@ function IconSend() {
   return <svg width="15" height="15" fill="none" viewBox="0 0 16 16"><P d={svgPaths.p82fb540} stroke="white" strokeWidth="1.33333" /><P d="M8 12.6667V3.33333" stroke="white" strokeWidth="1.33333" /></svg>;
 }
 function IconSearch() {
-  return <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><P d="M14 14L11.1067 11.1067" stroke="#737373" strokeWidth="1.33333" /><circle cx="6.5" cy="6.5" r="4.5" stroke="#737373" strokeWidth="1.33333" /></svg>;
+  return <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><P d="M14 14L11.1067 11.1067" stroke={color.text.muted} strokeWidth="1.33333" /><circle cx="6.5" cy="6.5" r="4.5" stroke={color.text.muted} strokeWidth="1.33333" /></svg>;
 }
-function IconFilter() {
-  return <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><P d="M2 4h12M4 8h8M6 12h4" stroke="#334155" strokeWidth="1.33333" /></svg>;
+/** 필터 버튼 아이콘 — 깔때기(funnel). 색은 열림 상태에 따라 호출부가 넘긴다. */
+function IconFilter({ color = "#334155" }: { color?: string }) {
+  return (
+    <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
+      <P d="M2 3h12l-4.6 5.4V13L6.6 11.5V8.4L2 3z" stroke={color} strokeWidth="1.33333" strokeLinejoin="round" />
+    </svg>
+  );
 }
 function IconApply() {
   return <svg width="14" height="14" fill="none" viewBox="0 0 14 14"><P d="M2.5 7L5.5 10L11.5 4" stroke="white" strokeWidth="1.5" /></svg>;
@@ -114,7 +178,7 @@ const landingAICards = [
   { title: "예비창업패키지 사업계획서" },
   { title: "럭셔리 다크 블루 랜딩페이지" },
   { title: "커뮤니티 게시글 스타일" },
-  { title: "네온 K-뷰티 포스터" },
+  { title: "네온 K뷰티 포스터" },
   { title: "크리에이티브 포트폴리오" },
 ];
 
@@ -129,15 +193,17 @@ const favoritesCards = [
   { title: "커뮤니티 게시글 스타일", isVideo: false },
 ];
 
+// count 는 목록 카드에 보여주는 요약값일 뿐이다.
+// 실제 빈칸 스키마는 서식 채우기 화면이 id 로 getFormFields(id) 를 조회해서 가져간다.
 const formsCards = [
-  { title: "강제퇴거명령에대한이의신청서", category: "외국인 비자 서식", count: 20, date: "2026. 2. 12." },
-  { title: "거소신고(신청)서", category: "외국인 비자 서식", count: 54, date: "2026. 2. 12." },
-  { title: "거주소재공사실확인서(명문병기)", category: "외국인 비자 서식", count: 35, date: "2026. 1. 23." },
-  { title: "거주소재공사실확인서(중문병기)", category: "외국인 비자 서식", count: 35, date: "2026. 1. 23." },
-  { title: "건강확인서", category: "외국인 비자 서식", count: 40, date: "2026. 1. 23." },
-  { title: "결혼이민자 부모 등 가족 초청장(F-1-5)", category: "외국인 비자 서식", count: 157, date: "2026. 1. 23." },
-  { title: "강점퇴거명령서", category: "외국인 비자 서식", count: 12, date: "2026. 1. 15." },
-  { title: "거소신고 사실증명 신청서", category: "외국인 비자 서식", count: 28, date: "2026. 1. 10." },
+  { id: "deport-objection", title: "강제퇴거명령에대한이의신청서", category: "외국인 비자 서식", count: 20, date: "2026. 2. 12." },
+  { id: "residence-report", title: "거소신고(신청)서", category: "외국인 비자 서식", count: 54, date: "2026. 2. 12." },
+  { id: "residence-confirm-ko", title: "거주소재공사실확인서(명문병기)", category: "외국인 비자 서식", count: 35, date: "2026. 1. 23." },
+  { id: "residence-confirm-cn", title: "거주소재공사실확인서(중문병기)", category: "외국인 비자 서식", count: 35, date: "2026. 1. 23." },
+  { id: "health-confirm", title: "건강확인서", category: "외국인 비자 서식", count: 40, date: "2026. 1. 23." },
+  { id: "family-invite-f15", title: "결혼이민자 부모 등 가족 초청장(F-1-5)", category: "외국인 비자 서식", count: 157, date: "2026. 1. 23." },
+  { id: "deport-order", title: "강점퇴거명령서", category: "외국인 비자 서식", count: 12, date: "2026. 1. 15." },
+  { id: "residence-proof", title: "거소신고 사실증명 신청서", category: "외국인 비자 서식", count: 28, date: "2026. 1. 10." },
 ];
 
 const docsCards = [
@@ -174,7 +240,7 @@ const pptAICards = [
 ];
 
 const videoAICards = [
-  { title: "유튜브 쇼츠 – 제품 소개" },
+  { title: "유튜브 쇼츠 · 제품 소개" },
   { title: "인스타그램 릴스 광고" },
   { title: "기업 홍보 영상" },
   { title: "이벤트 하이라이트" },
@@ -207,20 +273,22 @@ const myWorkItems = [
   { title: "이사 전 체크리스트 카드뉴스", tag: "이미지", date: "2026. 7. 2." },
 ];
 
-const homeCategories = [
-  { label: "이미지", screen: "image-ai" as Screen, icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><P d={svgPaths.p11d16a80} stroke="#F59E0B" strokeWidth="1.8" /><P d={svgPaths.p1b53d300} stroke="#F59E0B" strokeWidth="1.8" /><P d={svgPaths.p1c7c380} stroke="#F59E0B" strokeWidth="1.8" /></svg> },
-  { label: "랜딩페이지", screen: "landing-ai" as Screen, icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><P d={svgPaths.p111d5080} stroke="#22C55E" strokeWidth="1.8" /><P d={svgPaths.p2ca2ecb0} stroke="#22C55E" strokeWidth="1.8" /><P d={svgPaths.p3a313e00} stroke="#22C55E" strokeWidth="1.8" /></svg> },
-  { label: "동영상", screen: "video-ai" as Screen, icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><P d={svgPaths.p30fea100} stroke="#EF4444" strokeWidth="1.8" /><P d="M6.2 5.3L9.3 9.2" stroke="#EF4444" strokeWidth="1.8" /><P d="M12.4 3.4L15.5 7.4" stroke="#EF4444" strokeWidth="1.8" /><P d={svgPaths.p1ae59200} stroke="#EF4444" strokeWidth="1.8" /></svg> },
-  { label: "프레젠테이션", screen: "ppt-ai" as Screen, icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><P d="M2 3H22" stroke="#8B5CF6" strokeWidth="1.8" /><P d={svgPaths.p21109e00} stroke="#8B5CF6" strokeWidth="1.8" /><P d="M7 21L12 16L17 21" stroke="#8B5CF6" strokeWidth="1.8" /></svg> },
-  { label: "오디오", screen: "audio-ai" as Screen, icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><P d="M2 10V13" stroke="#D946EF" strokeWidth="1.8" /><P d="M6 6V17" stroke="#D946EF" strokeWidth="1.8" /><P d="M10 3V21" stroke="#D946EF" strokeWidth="1.8" /><P d="M14 8V15" stroke="#D946EF" strokeWidth="1.8" /><P d="M18 5V18" stroke="#D946EF" strokeWidth="1.8" /><P d="M22 10V13" stroke="#D946EF" strokeWidth="1.8" /></svg> },
-  { label: "문서", screen: "docs-ai" as Screen, icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><P d={svgPaths.pb007f00} stroke="#3B82F6" strokeWidth="1.8" /><P d={svgPaths.p1b58ab00} stroke="#3B82F6" strokeWidth="1.8" /><P d="M10 9H8" stroke="#3B82F6" strokeWidth="1.8" /><P d="M16 13H8" stroke="#3B82F6" strokeWidth="1.8" /><P d="M16 17H8" stroke="#3B82F6" strokeWidth="1.8" /></svg> },
-  { label: "서식", screen: "forms-ai" as Screen, icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><P d={svgPaths.p37c73510} stroke="#10B981" strokeWidth="1.8" /><P d="M15 5L19 9" stroke="#10B981" strokeWidth="1.8" /></svg> },
-  { label: "PPT 검수", screen: "home" as Screen, icon: <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><P d={svgPaths.pace200} stroke="#F59E0B" strokeWidth="1.8" /><P d="M9 12L11 14L15 10" stroke="#F59E0B" strokeWidth="1.8" /></svg> },
-];
+// 서비스 화면 히어로의 부제 문구. 화면 컴포넌트가 아니라 여기서만 고친다.
+// (다른 목 데이터와 같은 방식 — API 가 붙으면 이 상수만 응답으로 교체한다)
+const SERVICE_COPY = {
+  image: "썸네일·포스터·카드뉴스·상세페이지까지, SNS 홍보 이미지를 한 곳에서.",
+  landing: "코딩 없이, 배포 링크까지 자동으로 만들어지는 웹페이지.",
+  video: "릴스·숏츠·유튜브 영상을 템플릿으로 빠르게 제작해 보세요.",
+  ppt: "가로·세로 PPT를 AI로 생성하고 자유롭게 편집하세요.",
+  audio: "프롬프트로 만드는 나만의 배경음악, 제작물에 바로 삽입하세요.",
+  docs: "워드·한글(HWP)·엑셀 문서를 별도 툴 없이 한 번에 작성하세요.",
+  forms: "외국인도 쉽게 쓰는 공공서식, 다국어 번역과 가이드까지.",
+  // PPT 검수는 아직 전용 화면이 없어(홈 카테고리가 home 으로 연결됨) 쓰이지 않는다.
+  // 화면이 생기면 그대로 desc 로 넘기면 된다.
+  pptCheck: "완성된 PPT를 넣으면 오타·띄어쓰기부터 번역까지 자동 정리.",
+} as const;
 
 // ─── 공통 컴포넌트 ────────────────────────────────────────────────────────────
-
-const f = { fontFamily: "'Pretendard Variable', sans-serif" };
 
 // 마우스 hover가 가능한 기기인지 여부(데스크톱 true / 터치폰 false).
 // 터치 기기에서는 hover 이벤트가 없으므로 카드의 버튼들을 항상 노출/탭 동작으로 대체한다.
@@ -229,29 +297,208 @@ const HAS_HOVER =
   typeof window.matchMedia === "function" &&
   window.matchMedia("(hover: hover)").matches;
 
+// ─── 설정 · 메모리 데이터 ─────────────────────────────────────────────────────
+// 이 프로젝트에는 아직 API 계층이 없어 화면 데이터는 모두 모듈 상수(목 데이터)로 들어온다.
+// (recentChats·imageAICards·creditHistoryData 등과 같은 방식)
+// 실제 서버가 붙으면 아래 두 상수를 응답으로 교체하면 UI는 그대로 동작한다.
+
+type MemoryFact = { id: string; text: string; updatedAt: string };
+type MemorySummarySection = { id: string; title: string; paragraphs: string[]; updatedAt: string };
+
+const memoryLastUpdated = "15일 전";
+
+const memoryFacts: MemoryFact[] = [
+  { id: "f1", text: "주로 한국어로 소통합니다.", updatedAt: "7일 전" },
+  { id: "f2", text: "출력 파일 포맷은 고해상도 PNG를 기본으로 선호합니다.", updatedAt: "12일 전" },
+  { id: "f3", text: "이전 작업 시안에는 블루·웜톤 계열 색상이 사용되었습니다.", updatedAt: "18일 전" },
+  { id: "f4", text: "카드뉴스 제작 시 여백과 정렬 규칙을 먼저 확인합니다.", updatedAt: "23일 전" },
+  { id: "f5", text: "발표자료는 16:9 비율과 12장 내외 구성을 자주 사용합니다.", updatedAt: "약 1개월 전" },
+];
+
+const memorySummary: MemorySummarySection[] = [
+  {
+    id: "s1",
+    title: "사용자 컨텍스트",
+    paragraphs: [
+      "대화와 결과물 요청은 한국어로 진행하며, 영문 프롬프트가 필요한 경우에만 영어를 함께 사용합니다.",
+      "요청을 한 번에 길게 설명하기보다 템플릿을 먼저 고른 뒤 세부 조건을 덧붙이는 방식을 선호합니다.",
+      "디자인은 블루·웜톤 계열의 차분한 팔레트와 여백이 넉넉한 레이아웃을 반복적으로 선택했고, 결과물은 고해상도 PNG로 내려받습니다.",
+    ],
+    updatedAt: "15일 전",
+  },
+  {
+    id: "s2",
+    title: "업무",
+    paragraphs: [
+      "서비스 기획 담당자로서 문서 자동화 템플릿과 랜딩페이지, 업무용 스프레드시트, 사내 발표자료를 함께 관리합니다.",
+      "카드뉴스·상세페이지 이미지 제작과 문서 서식 정리가 가장 자주 수행하는 작업이며, 생성 결과를 검수한 뒤 팀에 공유합니다.",
+    ],
+    updatedAt: "약 1개월 전",
+  },
+  {
+    id: "s3",
+    title: "최근 관심사",
+    paragraphs: [
+      "문서 생성 서비스의 베타 테스트 준비에 집중하고 있습니다. 문서 분석 품질 개선과 스프레드시트 지원 범위 정리, 에디터에서 사용자가 수정한 내용이 유지되도록 하는 이슈를 주로 확인합니다.",
+      "랜딩페이지 A/B 테스트 결과를 추적하며 개발·디자인·QA 담당자와 일정 조율을 이어가고 있습니다.",
+    ],
+    updatedAt: "29일 전",
+  },
+  {
+    id: "s4",
+    title: "히스토리",
+    paragraphs: [
+      "최근 두 달간 제품 기획과 사내 문서 생성 작업을 병행했습니다. 초반에는 계약서·양식류 등 정형 문서를 정리했고, 이후 문서 생성 서비스의 베타 준비로 초점을 옮겼습니다.",
+      "서비스 개선 회의를 통해 정리된 항목들을 우선순위대로 반영했으며, 12장 분량의 안전 관리 발표자료처럼 실제 사용 사례를 만들어 템플릿 품질을 검증했습니다.",
+    ],
+    updatedAt: "약 1개월 전",
+  },
+];
+
 // ─── 설정 모달 ────────────────────────────────────────────────────────────────
 
-type SettingsTab = "외관" | "알림" | "메모리" | "크레딧";
+/**
+ * 설정 푸터의 글자색 — 이 화면에서 각주에 쓰는 흐린 회색.
+ * 프로젝트에 --text-muted 토큰은 없고, 가장 가까운 --muted-foreground(#717182)는
+ * 각주로 쓰기엔 진해서 이 파일이 보조 설명에 쓰는 회색과 같은 값을 쓴다.
+ */
+const FOOTER_MUTED = "#9ca3af";
 
-function SettingsModal({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<SettingsTab>("외관");
+export type SettingsTab = "화면 설정" | "알림" | "메모리" | "회사 정보" | "조직·사내 공유" | "AI 연결" | "크레딧" | "구독 및 결제";
+type MemoryFilter = "전체" | "사실" | "요약";
+
+// 설정 콘텐츠의 공통 섹션 헤더(제목 → 설명 → 컨트롤 순서를 모든 탭에서 동일하게 유지).
+// 모듈 스코프에 두어야 리렌더 때 입력 포커스가 끊기지 않는다.
+const NOTIF_PREF_KEY = "ddalkkak.settings.taskDoneNotif";
+
+// 2026-11-27: 설정 공통 조각(SettingsKit)으로 통일. 설명 글자를 muted(#9ca3af, 대비 2.5:1)에서 secondary(#64748b)로 올렸다.
+function SettingsSectionHead({ title, desc }: { title: string; desc?: string }) {
+  return <KitSectionHead title={title} desc={desc} />;
+}
+
+// 업데이트 시점 칩 (기존 태그 칩과 동일한 톤)
+function MemoryTimeChip({ value }: { value: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full px-2 py-0.5" style={{ background: "#f1f5f9" }}>
+      <span style={{ ...f, fontWeight: 500, fontSize: 11.5, color: "#64748b" }}>{value}</span>
+    </span>
+  );
+}
+
+function SettingsModal({ initialTab, onClose, onOpenTopUp, onOpenPlanChange }: {
+  initialTab?: SettingsTab;
+  onClose: () => void;
+  /** "크레딧" 탭의 "크레딧 충전" — 설정을 닫고 구매 페이지의 추가 충전 탭을 연다. */
+  onOpenTopUp: () => void;
+  /** "구독 및 결제" 탭의 "요금제 변경" — 설정을 닫고 구매 페이지의 월 구독 탭을 연다. */
+  onOpenPlanChange: () => void;
+}) {
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? "화면 설정");
+  // 1200px 이상(wide)에서는 좌측 세로 카테고리 메뉴, 그 아래에서는 기존 가로 탭 바 —
+  // 두 레이아웃이 색상 규칙이 달라(데스크톱은 카드·그림자 없는 은은한 강조, 모바일은
+  // 기존 흰 카드 탭 유지) CSS만으로는 어색해 JS로 분기한다(이 파일의 다른 곳들과
+  // 같은 useIsDesktop 패턴).
+  const isDesktop = useIsDesktop();
   const [theme, setTheme] = useState<"시스템" | "라이트" | "다크">("시스템");
-  const [notifEnabled, setNotifEnabled] = useState(false);
+  // 작업 완료 알림 — 사용자의 "켜기" 의사(notifPref, localStorage)와 브라우저 권한(notifPerm)을
+  // 따로 들고, 화면의 ON은 둘 다 참일 때만 보여 준다(권한이 없는데 ON으로 보이지 않게).
+  const notifSupported = typeof window !== "undefined" && "Notification" in window;
+  const readPerm = (): NotificationPermission | "unsupported" => (notifSupported ? Notification.permission : "unsupported");
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission | "unsupported">(readPerm);
+  const [notifPref, setNotifPref] = useState(() => {
+    try { return window.localStorage.getItem(NOTIF_PREF_KEY) === "1"; } catch { return false; }
+  });
+  const [notifRequesting, setNotifRequesting] = useState(false);
+  const notifEnabled = notifPref && notifPerm === "granted";
+  const saveNotifPref = (v: boolean) => {
+    setNotifPref(v);
+    try { window.localStorage.setItem(NOTIF_PREF_KEY, v ? "1" : "0"); } catch { /* 저장 불가 환경 — 이번 세션 상태만 유지 */ }
+  };
+  // 브라우저 설정에서 권한을 바꾸고 돌아와도 바로 반영되게 — permissions API 변경 이벤트 + 창 포커스 시 다시 읽기.
+  useEffect(() => {
+    if (!notifSupported) return;
+    const sync = () => setNotifPerm(Notification.permission);
+    window.addEventListener("focus", sync);
+    let status: PermissionStatus | null = null;
+    navigator.permissions?.query({ name: "notifications" as PermissionName }).then((st) => { status = st; st.onchange = sync; }).catch(() => {});
+    return () => { window.removeEventListener("focus", sync); if (status) status.onchange = null; };
+  }, [notifSupported]);
+  const toggleNotif = async () => {
+    if (notifRequesting) return;
+    if (notifEnabled) { saveNotifPref(false); return; }
+    if (!notifSupported) return;
+    if (Notification.permission === "granted") { setNotifPerm("granted"); saveNotifPref(true); return; }
+    if (Notification.permission === "denied") { setNotifPerm("denied"); return; } // 다시 물을 수 없다 — 아래 안내만 보인다.
+    setNotifRequesting(true);
+    try {
+      const result = await Notification.requestPermission();
+      setNotifPerm(result);
+      if (result === "granted") saveNotifPref(true);
+    } finally {
+      setNotifRequesting(false);
+    }
+  };
+  const contentRef = React.useRef<HTMLDivElement>(null);
 
-  const tabs: SettingsTab[] = ["외관", "알림", "메모리", "크레딧"];
+  // 메모리 탭 — 검색어 / 필터 / 사실 목록(개별·전체 삭제, 추가)
+  const [memQuery, setMemQuery] = useState("");
+  const [memFilter, setMemFilter] = useState<MemoryFilter>("전체");
+  const [facts, setFacts] = useState<MemoryFact[]>(memoryFacts);
+  const [factDraft, setFactDraft] = useState("");
+  const [addingFact, setAddingFact] = useState(false);
+
+  // 2026-11-27: 딸깍 데스크톱 설정 구성 반영(회사 정보 · 조직·사내 공유 · AI 연결). AI 연결이 예전 "AI 모델" 탭 자리를 대신한다.
+  const tabs: SettingsTab[] = ["화면 설정", "알림", "메모리", "회사 정보", "조직·사내 공유", "AI 연결", "크레딧", "구독 및 결제"];
+
+  const memq = memQuery.trim();
+  const visibleFacts = memFilter === "요약" ? [] : facts.filter((it) => !memq || it.text.includes(memq));
+  const visibleSummary = memFilter === "사실" ? [] : memorySummary.filter(
+    (s) => !memq || s.title.includes(memq) || s.paragraphs.some((p) => p.includes(memq))
+  );
+  const memoryEmpty = visibleFacts.length === 0 && visibleSummary.length === 0;
+
+  const addFact = () => {
+    const text = factDraft.trim();
+    if (!text) return;
+    setFacts((prev) => [{ id: `f-${Date.now()}`, text, updatedAt: "방금 전" }, ...prev]);
+    setFactDraft("");
+    setAddingFact(false);
+  };
+
+  // 모달이 열려 있는 동안 바깥 페이지 스크롤을 잠근다.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // 탭 전환 시 콘텐츠 스크롤을 처음으로 되돌려 위치가 튀지 않게 한다.
+  React.useEffect(() => { contentRef.current?.scrollTo({ top: 0 }); }, [tab]);
+
+  // Esc로 닫기 — 데스크톱 모달의 X와 짝을 이루는 표준 닫기.
+  // (모바일 바텀시트는 그랩 핸들과 바깥 탭으로 닫으므로 X를 두지 않는다)
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const tabIcons: Record<SettingsTab, React.ReactNode> = {
-    "외관": <Palette size={17} strokeWidth={1.7} />,
-    "알림": <Bell size={17} strokeWidth={1.7} />,
-    "메모리": <Brain size={17} strokeWidth={1.7} />,
-    "크레딧": <Coins size={17} strokeWidth={1.7} />,
+    "화면 설정": <Palette size={20} strokeWidth={1.7} />,
+    "알림": <Bell size={20} strokeWidth={1.7} />,
+    "메모리": <Brain size={20} strokeWidth={1.7} />,
+    "회사 정보": <Building2 size={20} strokeWidth={1.7} />,
+    "조직·사내 공유": <Users size={20} strokeWidth={1.7} />,
+    "AI 연결": <Plug size={20} strokeWidth={1.7} />,
+    "크레딧": <Coins size={20} strokeWidth={1.7} />,
+    "구독 및 결제": <CreditCard size={20} strokeWidth={1.7} />,
   };
 
   const themeCards = [
     {
       id: "시스템" as const,
       label: "시스템",
-      desc: "운영체제 설정을\n자동으로 따릅니다.",
+      desc: "운영체제 설정을 자동으로 따릅니다.",
       icon: <Monitor size={18} strokeWidth={1.7} />,
     },
     {
@@ -275,82 +522,171 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           from { transform: translateY(100%); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }
+        @keyframes settingsFadeIn {
+          from { transform: scale(0.98); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        /* 모바일·태블릿은 바텀시트로 올라오고, 데스크톱(중앙 정렬)에서는 페이드로 나타난다. */
+        .settings-shell { animation: settingsSlideUp 280ms cubic-bezier(0.32,0.72,0,1); }
+        @media (min-width: 1200px) {
+          .settings-shell { animation: settingsFadeIn 180ms ease-out; }
+        }
       `}</style>
       {/* backdrop */}
       <div onClick={onClose} className="fixed inset-0 z-[70] bg-black/40" />
 
-      {/* modal panel */}
+      {/* 위치 래퍼 — 767px 이하·태블릿은 화면 하단에 붙는 바텀시트, 1200px 이상은 화면 중앙 다이얼로그.
+          pointer-events-none 이라 셸 바깥을 누르면 backdrop이 그대로 닫기를 받는다. */}
+      <div className="fixed inset-0 z-[71] flex flex-col justify-end pointer-events-none wide:items-center wide:justify-center wide:p-8">
+
+      {/* modal shell — 네 탭이 공유하는 단일 셸.
+          높이를 뷰포트 기준(dvh)으로 고정해 탭 콘텐츠 양과 무관하게 상·하단 위치가 항상 같다.
+          dvh를 쓰므로 모바일 주소창이 접히고 펼쳐져도 함께 대응된다.
+          폭 구간별 높이 — 모바일 min(82dvh,760px) / 태블릿 min(86dvh,880px) / 데스크톱 min(78dvh,760px),
+          각 구간의 max-height로 화면 위아래에 항상 여백이 남게 한다. */}
       <div
-        className="fixed left-0 right-0 bottom-0 z-[71] bg-white flex flex-col"
-        style={{
-          borderRadius: "24px 24px 0 0",
-          maxHeight: "92vh",
-          animation: "settingsSlideUp 280ms cubic-bezier(0.32,0.72,0,1)",
-          boxShadow: "0px -8px 40px rgba(0,0,0,0.18)",
-        }}
+        className={
+          "settings-shell pointer-events-auto w-full bg-white flex flex-col overflow-hidden " +
+          "rounded-t-[24px] wide:rounded-[24px] wide:max-w-[1040px] " +
+          // md와 wide의 출력 순서에 기대지 않도록 태블릿 높이는 768~1199 범위로 못박는다
+          "h-[min(82dvh,760px)] max-h-[calc(100dvh-64px)] " +
+          "md:max-wide:h-[min(86dvh,880px)] md:max-wide:max-h-[calc(100dvh-48px)] " +
+          // 데스크톱은 좌측 탭 메뉴에 빈 공간이 많이 남는 반면 우측 콘텐츠가 먼저 넘친다.
+          // (외관 탭의 마지막 "언어" 셀렉트가 하단 경계에 물리던 원인)
+          // 세로를 태블릿과 같은 여유로 올려 콘텐츠 쪽 높이를 벌어준다.
+          "wide:h-[min(86dvh,880px)] wide:max-h-[calc(100dvh-80px)]"
+        }
+        style={{ boxShadow: "0px -8px 40px rgba(0,0,0,0.18)" }}
       >
-        {/* drag handle */}
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
+        {/* drag handle — 바텀시트일 때만 노출(데스크톱 중앙 다이얼로그에는 끌 손잡이가 없다) */}
+        <div className="flex justify-center pt-4 pb-1 shrink-0 wide:hidden">
           <div className="w-9 h-1 rounded-full bg-[#d1d5db]" />
         </div>
 
-        {/* header */}
-        <div className="flex items-start justify-between px-5 pt-2 pb-4 shrink-0">
+        {/* header — 제목/설명/닫기. 모든 폭에서 고정 */}
+        <div className="flex items-start justify-between px-5 pt-4 pb-4 shrink-0 wide:px-7 wide:pt-6 wide:pb-5 wide:border-b wide:border-[#f1f5f9]">
           <div>
             <p style={{ ...f, fontWeight: 700, fontSize: 20, color: "#0a0a0a", letterSpacing: "-0.6px" }}>설정</p>
-            <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", marginTop: 3, letterSpacing: "-0.2px" }}>딸깍의 외관과 동작을 설정합니다.</p>
+            <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", marginTop: 3, letterSpacing: "-0.2px" }}>딸깍의 화면과 동작을 정해요.</p>
           </div>
-          <button onClick={onClose}
-            className="size-9 rounded-full bg-[#f1f5f9] flex items-center justify-center shrink-0 mt-0.5">
+          {/* 닫기 — 데스크톱 모달 전용.
+              바텀시트에는 그랩 핸들과 바깥 탭(backdrop)·Esc 가 이미 있어 X가 중복이고,
+              원형 면에 담긴 X가 "설정" 제목과 시각적 무게를 나눠 가진다. */}
+          <button onClick={onClose} aria-label="닫기"
+            className="hidden wide:flex size-9 rounded-full bg-[#f1f5f9] items-center justify-center shrink-0 mt-0.5">
             <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
               <path d="M4 4L12 12M12 4L4 12" stroke="#374151" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
           </button>
         </div>
 
-        {/* tab bar */}
-        <div className="shrink-0 px-4 pb-3">
-          <div className="flex bg-[#f1f5f9] rounded-[16px] p-1 gap-0.5">
-            {tabs.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className="flex-1 flex flex-col items-center gap-1 py-2.5 rounded-[12px] transition-all duration-150"
-                style={{
-                  background: tab === t ? "white" : "transparent",
-                  boxShadow: tab === t ? "0px 1px 4px rgba(0,0,0,0.1)" : "none",
-                  color: tab === t ? "#0a0a0a" : "#9ca3af",
-                }}
-              >
-                {tabIcons[t]}
-                <span style={{ ...f, fontWeight: tab === t ? 600 : 500, fontSize: 11 }}>{t}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* body — 767px 이하·태블릿: 가로 탭 + 아래 콘텐츠 / 1200px 이상: 좌측 사이드 메뉴 + 우측 콘텐츠 */}
+        <div className="flex-1 min-h-0 flex flex-col wide:flex-row">
 
-        {/* content */}
-        <div className="flex-1 overflow-y-auto px-4 pb-8" style={{ scrollbarWidth: "none" }}>
+          {/* 탭 메뉴 — 767px 이하·태블릿은 기존 흰 카드 가로 탭 그대로. 1200px 이상(wide)은
+              전체를 감싸는 회색 박스·선택 항목의 흰 카드+그림자를 없애고, 세로 목록 위에
+              선택 행만 은은한 중립색(#f1f5f9, 이 파일에서 구분선·배경으로 이미 쓰는 톤)
+              배경으로 강조한다. 비선택 텍스트는 #1e293b(프로필 메뉴 행 라벨과 같은 톤)로
+              — 옅은 회색은 비활성처럼 보여서 피한다.
+              글자 크기는 클래스(wide:text-*)가 아니라 isDesktop 분기로 직접 정한다 —
+              이 파일의 인라인 style은 항상 클래스보다 우선이라(Button.tsx 등에서 이미
+              확인된 문제) wide: 접두사 클래스를 얹어도 인라인 fontSize에 덮여 무시된다. */}
+          {/* 1200px 아래(2026-11-27): 탭이 8개로 늘자 회색 상자 속 아이콘 탭이 화면 밖으로 잘리고, 고른 탭(AI 연결 등)이
+              안 보이고, 아래 내용과 경계도 없었다 → 공통 밑줄 탭(ScrollableChips underline, 요금제 페이지와 같은 내비게이션 탭).
+              글자만, 고른 탭은 가운데로 스크롤, 아래 구분선으로 내용과 나눈다. */}
+          {!isDesktop && (
+            <div className="shrink-0 px-5" style={{ borderBottom: "1px solid #f1f5f9" }}>
+              <ScrollableChips
+                items={tabs}
+                activeIndex={tabs.indexOf(tab)}
+                onChange={(i) => setTab(tabs[i])}
+                variant="underline"
+                edgeClassName="-mx-5 px-5 gap-6"
+                centerActiveOnChange
+              />
+            </div>
+          )}
+          <div className={isDesktop ? "shrink-0 wide:w-[232px] wide:px-4 wide:py-5" : "hidden"}>
+            <div className="flex wide:flex-col gap-0.5 wide:gap-1.5">
+              {tabs.map((t) => {
+                const selected = tab === t;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    aria-current={selected ? "page" : undefined}
+                    className={[
+                      "flex-1 shrink-0 min-w-[72px] wide:min-w-0 wide:flex-none flex flex-col wide:flex-row items-center wide:justify-start gap-1 wide:gap-3",
+                      "py-2.5 wide:py-0 transition-colors duration-150 outline-none",
+                      "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#4f7bff]",
+                      isDesktop && !selected ? "hover:bg-[#f8fafc]" : "",
+                    ].join(" ")}
+                    style={{
+                      background: isDesktop ? (selected ? "#f1f5f9" : "transparent") : selected ? "white" : "transparent",
+                      boxShadow: isDesktop ? "none" : selected ? "0px 1px 4px rgba(0,0,0,0.1)" : "none",
+                      color: selected ? "#0a0a0a" : isDesktop ? "#1e293b" : "#9ca3af",
+                      borderRadius: radius.control,
+                      minHeight: isDesktop ? controlHeight.md : undefined,
+                      paddingLeft: isDesktop ? 12 : undefined,
+                      paddingRight: isDesktop ? 12 : undefined,
+                    }}
+                  >
+                    {tabIcons[t]}
+                    <span
+                      className="whitespace-nowrap"
+                      style={{ ...f, fontWeight: selected ? 600 : 500, fontSize: isDesktop ? 16 : 11, lineHeight: isDesktop ? "24px" : undefined }}
+                    >
+                      {t}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* content — 헤더/탭바/푸터를 뺀 남은 높이를 차지하고, 넘칠 때 이 영역만 스크롤한다.
+              minHeight:0 이 없으면 flex 자식이 콘텐츠 높이만큼 밀려 셸이 늘어난다.
+              하단 여백은 마지막 요소(외관 탭의 "언어" 셀렉트)가 푸터 구분선에 붙지 않게 하는 몫이다. */}
+          <div
+            ref={contentRef}
+            className="flex-1 overflow-y-auto px-5 pb-10 wide:px-8 wide:pb-12 wide:border-l wide:border-[#f1f5f9]"
+            style={{ scrollbarWidth: "none", minHeight: 0, overscrollBehavior: "contain" }}
+          >
+          {/* 본문은 읽기 좋은 너비로 제한하고 좌측 시작선을 통일한다.
+              상단 여백은 스크롤 컨테이너가 아니라 이 래퍼가 갖는다 —
+              스크롤 컨테이너에 padding-top이 있으면 sticky 요소가 그만큼 아래에 붙어 콘텐츠가 비친다. */}
+          <div className="w-full pt-5 wide:max-w-[720px] wide:pt-4">
 
           {/* ── 외관 ── */}
-          {tab === "외관" && (
-            <div className="flex flex-col gap-6">
-              <div>
-                <p style={{ ...f, fontWeight: 700, fontSize: 16, color: "#0a0a0a", letterSpacing: "-0.4px", marginBottom: 6 }}>테마</p>
-                <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", letterSpacing: "-0.2px", marginBottom: 14 }}>인터페이스가 기기를 따르도록 하거나 고정된 테마를 선택합니다.</p>
-                <div className="flex gap-2.5">
+          {tab === "화면 설정" && (
+            <div className="flex flex-col gap-7">
+              <section className="flex flex-col gap-3.5">
+                <SettingsSectionHead title="테마" desc="인터페이스가 기기를 따르도록 하거나 고정된 테마를 선택합니다." />
+                {/* 3열 균등 배치 — grid라 카드 폭이 같고, stretch로 높이도 같아진다 */}
+                <div className="grid grid-cols-3 gap-2.5 items-stretch">
                   {themeCards.map((tc) => (
                     <button
                       key={tc.id}
+                      type="button"
                       onClick={() => setTheme(tc.id)}
-                      className="flex-1 flex flex-col rounded-[16px] overflow-hidden border-2 transition-all duration-150"
+                      aria-pressed={theme === tc.id}
+                      // 위: 아이콘 + 이름 + 한 줄 설명 / 아래: 미리보기 — 선택지마다 무엇이 다른지 글로도 알 수 있게(2026-10-02).
+                      className="h-full flex flex-col gap-3 rounded-[16px] border-2 p-3 text-left transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#4f7bff]"
                       style={{
                         borderColor: theme === tc.id ? "#0a0a0a" : "#e2e8f0",
                         background: theme === tc.id ? "#fafafa" : "white",
                       }}
                     >
+                      {/* 좁은 화면(3열이 좁음)에서는 아이콘을 위로 올려 설명이 카드 폭을 다 쓰게 한다. */}
+                      <div className="flex flex-col items-start gap-2 sm:flex-row sm:gap-2.5">
+                        <span className="shrink-0 size-8 rounded-[10px] flex items-center justify-center" style={{ background: "#f1f5f9", color: theme === tc.id ? "#0a0a0a" : "#64748b" }}>{tc.icon}</span>
+                        <span className="min-w-0">
+                          <span className="block" style={{ ...f, fontWeight: 600, fontSize: 13.5, color: "#0a0a0a", letterSpacing: "-0.2px" }}>{tc.label}</span>
+                          <span className="block mt-0.5" style={{ ...f, fontWeight: 400, fontSize: 12, color: "#64748b", letterSpacing: "-0.2px", lineHeight: 1.45, wordBreak: "keep-all" }}>{tc.desc}</span>
+                        </span>
+                      </div>
                       {/* preview */}
-                      <div className="w-full bg-[#f1f5f9] relative" style={{ paddingBottom: "80%" }}>
+                      <div className="mt-auto w-full rounded-[10px] border border-[#e2e8f0] relative overflow-hidden" style={{ paddingBottom: "68%", background: tc.id === "다크" ? "#f1f4f9" : "#f8fafc" }}>
                         <div className="absolute inset-0 p-2 flex flex-col gap-1.5">
                           <div className="flex items-center gap-1">
                             <div className="size-2 rounded-full bg-[#22c55e]" />
@@ -370,20 +706,16 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                           </div>
                         </div>
                       </div>
-                      {/* label */}
-                      <div className="px-2 py-2.5 flex items-center gap-1.5">
-                        <span style={{ color: theme === tc.id ? "#0a0a0a" : "#9ca3af" }}>{tc.icon}</span>
-                        <span style={{ ...f, fontWeight: 600, fontSize: 12, color: theme === tc.id ? "#0a0a0a" : "#6b7280", letterSpacing: "-0.2px" }}>{tc.label}</span>
-                      </div>
                     </button>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              <div>
-                <p style={{ ...f, fontWeight: 700, fontSize: 16, color: "#0a0a0a", letterSpacing: "-0.4px", marginBottom: 6 }}>언어</p>
-                <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", letterSpacing: "-0.2px", marginBottom: 12 }}>언어를 전환합니다.</p>
-                <div className="relative">
+              {/* 언어 — 선택지 하나짜리 설정이라 "왼쪽 제목·설명 / 오른쪽 컨트롤" 가로 행으로 둔다
+                  (테마처럼 넓은 카드가 필요한 설정만 세로로 쌓는다). 좁은 화면에서는 세로로 접힌다. */}
+              <section className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                <SettingsSectionHead title="언어" desc="언어를 전환합니다." />
+                <div className="relative w-full sm:w-[200px] shrink-0">
                   <select
                     className="w-full h-11 bg-white border border-[#e2e8f0] rounded-[14px] px-4 pr-10 appearance-none outline-none"
                     style={{ ...f, fontWeight: 500, fontSize: 14, color: "#0a0a0a" }}
@@ -400,21 +732,37 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     </svg>
                   </div>
                 </div>
-              </div>
+              </section>
             </div>
           )}
 
           {/* ── 알림 ── */}
           {tab === "알림" && (
-            <div className="flex flex-col gap-5">
-              <div className="flex items-start justify-between gap-3">
-                <p style={{ ...f, fontWeight: 400, fontSize: 13.5, color: "#374151", letterSpacing: "-0.2px", lineHeight: 1.6, flex: 1 }}>
-                  딸깍는 창이 활성 상태가 아닐 때만 완료 알림을 보냅니다. 장시간 작업에 특히 유용하여 다른 작업을 하다가 완료 알림을 받을 수 있습니다.
-                </p>
-                {/* toggle */}
+            <div className="flex flex-col gap-4">
+              <SettingsSectionHead
+                title="실시간 알림 제어"
+                desc="딸깍는 창이 활성 상태가 아닐 때만 완료 알림을 보냅니다. 장시간 작업에 특히 유용하여 다른 작업을 하다가 완료 알림을 받을 수 있습니다."
+              />
+              {/* 설정 항목 카드 — 왼쪽 설정명·보조 설명 / 오른쪽 토글 */}
+              <div className="bg-white border border-[#e2e8f0] rounded-[16px] px-4 py-4 flex items-start justify-between gap-4"
+                style={{ boxShadow: "0px 1px 3px rgba(0,0,0,0.05)" }}>
+                <div className="min-w-0">
+                  <p style={{ ...f, fontWeight: 600, fontSize: 14, color: "#0a0a0a", letterSpacing: "-0.3px" }}>작업 완료 알림</p>
+                  <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", letterSpacing: "-0.2px", lineHeight: 1.6, marginTop: 4 }}>
+                    이미지·문서·랜딩페이지 등 생성 작업이 끝나면 알려드립니다.
+                  </p>
+                </div>
+                {/* toggle — 켤 때 권한이 아직 없으면 브라우저 권한 요청이 바로 이어진다(별도 버튼 없음).
+                    허용된 경우에만 ON으로 바뀐다. */}
                 <button
-                  onClick={() => setNotifEnabled((v) => !v)}
-                  className="shrink-0 relative w-11 h-6 rounded-full transition-colors duration-200 mt-1"
+                  type="button"
+                  role="switch"
+                  aria-checked={notifEnabled}
+                  aria-label="작업 완료 알림"
+                  aria-busy={notifRequesting}
+                  disabled={notifRequesting || notifPerm === "unsupported"}
+                  onClick={toggleNotif}
+                  className="shrink-0 relative w-11 h-6 rounded-full transition-colors duration-200 mt-1 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#4f7bff] disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: notifEnabled ? "#0a0a0a" : "#d1d5db" }}
                 >
                   <div
@@ -423,69 +771,202 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                 </button>
               </div>
-              <button
-                className="w-full h-12 rounded-[14px] flex items-center justify-center gap-2"
-                style={{ background: "#0a0a0a" }}
-              >
-                <Bell size={16} strokeWidth={1.8} color="white" />
-                <span style={{ ...f, fontWeight: 600, fontSize: 14, color: "white", letterSpacing: "-0.3px" }}>알림 권한 요청</span>
-              </button>
+              {/* 권한 상태 안내 — 차단됐거나 지원하지 않을 때만, 토글 카드 바로 아래 한 줄로. */}
+              {notifPerm === "denied" && (
+                <p role="status" style={{ ...f, fontWeight: 400, fontSize: 13, color: "#4b5262", letterSpacing: "-0.2px", lineHeight: 1.6 }}>
+                  브라우저에서 알림이 차단돼 있어요. 주소창 왼쪽의 사이트 정보 아이콘을 눌러 알림을 ‘허용’으로 바꾼 뒤 다시 켜 주세요.
+                </p>
+              )}
+              {notifPerm === "unsupported" && (
+                <p role="status" style={{ ...f, fontWeight: 400, fontSize: 13, color: "#4b5262", letterSpacing: "-0.2px", lineHeight: 1.6 }}>
+                  이 브라우저는 알림을 지원하지 않아요.
+                </p>
+              )}
             </div>
           )}
 
           {/* ── 메모리 ── */}
           {tab === "메모리" && (
-            <div className="flex flex-col gap-4">
-              <p style={{ ...f, fontWeight: 400, fontSize: 13.5, color: "#374151", letterSpacing: "-0.2px", lineHeight: 1.65 }}>
-                딸깍는 백그라운드에서 대화를 자동으로 학습합니다. 이러한 기억은 딸깍가 사용자를 더 잘 이해하고 개인화된 경험을 제공하는 데 도움이 됩니다.
-              </p>
-              <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", letterSpacing: "-0.2px" }}>로딩 중...</p>
-            </div>
-          )}
-
-          {/* ── 크레딧 ── */}
-          {tab === "크레딧" && (
-            <div className="flex flex-col gap-5">
-              <div>
-                <p style={{ ...f, fontWeight: 700, fontSize: 16, color: "#0a0a0a", letterSpacing: "-0.4px", marginBottom: 4 }}>크레딧 사용량</p>
-                <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", letterSpacing: "-0.2px", marginBottom: 16 }}>API 사용 비용을 추적합니다.</p>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {[
-                    { label: "총 작업 수", value: "···" },
-                    { label: "예상 비용", value: "$···" },
-                    { label: "실제 비용", value: "$···" },
-                    { label: "총 토큰", value: "···" },
-                  ].map(({ label, value }) => (
-                    <div key={label}
-                      className="bg-white border border-[#e2e8f0] rounded-[16px] p-4"
-                      style={{ boxShadow: "0px 1px 3px rgba(0,0,0,0.05)" }}>
-                      <p style={{ ...f, fontWeight: 500, fontSize: 12, color: "#9ca3af", letterSpacing: "-0.2px", marginBottom: 8 }}>{label}</p>
-                      <p style={{ ...f, fontWeight: 700, fontSize: 20, color: "#0a0a0a", letterSpacing: "-0.5px" }}>{value}</p>
+            <div className="flex flex-col">
+              <SettingsSectionHead
+                title="메모리"
+                desc="딸깍는 백그라운드에서 대화를 자동으로 학습합니다. 이러한 기억은 딸깍가 사용자를 더 잘 이해하고 개인화된 경험을 제공하는 데 도움이 됩니다."
+              />
+              {/* 검색·필터·액션만 상단 고정 — 목록을 스크롤해도 바로 접근할 수 있게 한다 */}
+              <div className="sticky top-0 z-10 bg-white pt-3.5 pb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* 검색 */}
+                  <div className="relative flex-1 min-w-[150px]">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <Search size={15} strokeWidth={1.8} color="#9ca3af" />
                     </div>
-                  ))}
+                    <input
+                      value={memQuery}
+                      onChange={(e) => setMemQuery(e.target.value)}
+                      placeholder="메모리 검색"
+                      className="w-full h-10 bg-white border border-[#e2e8f0] rounded-[14px] pl-9 pr-3 outline-none"
+                      style={{ ...f, fontWeight: 400, fontSize: 13, color: "#0a0a0a" }}
+                    />
+                  </div>
+                  {/* 필터 */}
+                  <div className="flex bg-[#f1f5f9] rounded-[14px] p-1 gap-0.5 shrink-0">
+                    {(["전체", "사실", "요약"] as MemoryFilter[]).map((k) => (
+                      <button key={k} onClick={() => setMemFilter(k)}
+                        className="h-8 px-3 rounded-[10px] transition-all duration-150"
+                        style={{
+                          background: memFilter === k ? "white" : "transparent",
+                          boxShadow: memFilter === k ? "0px 1px 4px rgba(0,0,0,0.1)" : "none",
+                        }}>
+                        <span style={{ ...f, fontWeight: memFilter === k ? 600 : 500, fontSize: 12.5, color: memFilter === k ? "#0a0a0a" : "#9ca3af" }}>{k}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {/* 액션 */}
+                  <button onClick={() => setAddingFact((v) => !v)}
+                    className="h-10 px-3.5 rounded-[14px] border border-[#e2e8f0] bg-white flex items-center gap-1.5 shrink-0"
+                    style={{ boxShadow: "0px 1px 2px rgba(0,0,0,0.06)" }}>
+                    <Plus size={14} strokeWidth={1.8} color="#6b7280" />
+                    <span style={{ ...f, fontWeight: 500, fontSize: 13, color: "#6b7280" }}>사실 추가</span>
+                  </button>
+                  <button onClick={() => setFacts([])} disabled={facts.length === 0}
+                    className="h-10 px-3.5 rounded-[14px] border border-[#e2e8f0] bg-white flex items-center shrink-0"
+                    style={{ boxShadow: "0px 1px 2px rgba(0,0,0,0.06)", opacity: facts.length === 0 ? 0.45 : 1 }}>
+                    <span style={{ ...f, fontWeight: 600, fontSize: 13, color: "#e7000b" }}>메모리 전체 삭제</span>
+                  </button>
                 </div>
+                {/* 사실 추가 입력 */}
+                {addingFact && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      value={factDraft}
+                      onChange={(e) => setFactDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") addFact(); }}
+                      placeholder="기억할 내용을 입력해 주세요"
+                      autoFocus
+                      className="flex-1 h-10 bg-white border border-[#e2e8f0] rounded-[14px] px-3.5 outline-none"
+                      style={{ ...f, fontWeight: 400, fontSize: 13, color: "#0a0a0a" }}
+                    />
+                    <button onClick={addFact} className="h-10 px-4 rounded-[14px] shrink-0" style={{ background: "#0a0a0a" }}>
+                      <span style={{ ...f, fontWeight: 600, fontSize: 13, color: "white" }}>추가</span>
+                    </button>
+                    <button onClick={() => { setAddingFact(false); setFactDraft(""); }} className="h-10 px-2 shrink-0">
+                      <span style={{ ...f, fontWeight: 500, fontSize: 13, color: "#9ca3af" }}>취소</span>
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-end">
-                <button
-                  className="flex items-center gap-1.5 h-9 px-4 rounded-[12px] border border-[#e2e8f0] bg-white"
-                  style={{ boxShadow: "0px 1px 2px rgba(0,0,0,0.06)" }}>
-                  <RefreshCw size={14} strokeWidth={1.7} color="#6b7280" />
-                  <span style={{ ...f, fontWeight: 500, fontSize: 13, color: "#6b7280" }}>새로고침</span>
-                </button>
+
+              {/* 메모리 본문 */}
+              <div className="flex flex-col gap-5 pt-1">
+                {/* 개요 — 검색 중에는 결과에 집중할 수 있도록 감춘다 */}
+                {!memq && memFilter === "전체" && (
+                  <div className="bg-white border border-[#e2e8f0] rounded-[16px] px-4 py-4"
+                    style={{ boxShadow: "0px 1px 3px rgba(0,0,0,0.05)" }}>
+                    <p style={{ ...f, fontWeight: 600, fontSize: 14, color: "#0a0a0a", letterSpacing: "-0.3px" }}>개요</p>
+                    <div className="flex items-center gap-2 mt-2.5">
+                      <span style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af" }}>최종 업데이트</span>
+                      <MemoryTimeChip value={memoryLastUpdated} />
+                    </div>
+                    <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", lineHeight: 1.6, marginTop: 8 }}>
+                      사실 {facts.length}개와 요약 {memorySummary.length}개 섹션이 저장되어 있습니다.
+                    </p>
+                  </div>
+                )}
+
+                {/* 사실 — 개별 삭제 가능 */}
+                {visibleFacts.length > 0 && (
+                  <section className="flex flex-col gap-2.5">
+                    <p style={{ ...f, fontWeight: 600, fontSize: 12.5, color: "#9ca3af", letterSpacing: "-0.2px" }}>사실</p>
+                    {visibleFacts.map((fact) => (
+                      <div key={fact.id}
+                        className="bg-white border border-[#e2e8f0] rounded-[14px] px-4 py-3 flex items-start justify-between gap-3"
+                        style={{ boxShadow: "0px 1px 3px rgba(0,0,0,0.05)" }}>
+                        <div className="min-w-0">
+                          <p style={{ ...f, fontWeight: 500, fontSize: 13.5, color: "#0a0a0a", letterSpacing: "-0.2px", lineHeight: 1.6 }}>{fact.text}</p>
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            <span style={{ ...f, fontWeight: 400, fontSize: 12, color: "#9ca3af" }}>업데이트</span>
+                            <MemoryTimeChip value={fact.updatedAt} />
+                          </div>
+                        </div>
+                        <button onClick={() => setFacts((prev) => prev.filter((x) => x.id !== fact.id))}
+                          className="shrink-0 h-7 px-2 flex items-center">
+                          <span style={{ ...f, fontWeight: 600, fontSize: 12.5, color: "#e7000b" }}>삭제</span>
+                        </button>
+                      </div>
+                    ))}
+                  </section>
+                )}
+
+                {/* 요약 — 섹션 제목 / 본문 문단 / 업데이트 시점을 구분하고 사이에 구분선 */}
+                {visibleSummary.map((s, i) => (
+                  <React.Fragment key={s.id}>
+                    {(i > 0 || visibleFacts.length > 0) && <div className="h-px bg-[#f1f5f9]" />}
+                    <section className="flex flex-col gap-2">
+                      <p style={{ ...f, fontWeight: 700, fontSize: 15, color: "#0a0a0a", letterSpacing: "-0.35px" }}>{s.title}</p>
+                      {s.paragraphs.map((p, idx) => (
+                        <p key={idx} style={{ ...f, fontWeight: 400, fontSize: 13.5, color: "#374151", letterSpacing: "-0.2px", lineHeight: 1.7 }}>{p}</p>
+                      ))}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span style={{ ...f, fontWeight: 400, fontSize: 12, color: "#9ca3af" }}>업데이트 시간</span>
+                        <MemoryTimeChip value={s.updatedAt} />
+                      </div>
+                    </section>
+                  </React.Fragment>
+                ))}
+
+                {/* 빈 상태 — 검색 결과 없음 / 저장된 메모리 없음 */}
+                {memoryEmpty && (
+                  <div className="flex flex-col items-center justify-center text-center gap-2 py-14">
+                    <Brain size={28} strokeWidth={1.5} color="#cbd5e1" />
+                    <p style={{ ...f, fontWeight: 600, fontSize: 14, color: "#374151", letterSpacing: "-0.3px" }}>
+                      {memq ? "검색 결과가 없습니다" : "저장된 메모리가 없습니다"}
+                    </p>
+                    <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", lineHeight: 1.6 }}>
+                      {memq ? "다른 검색어로 찾아보세요." : "대화를 나누면 딸깍가 자동으로 기억을 만들어요."}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
+
+          {/* ── 크레딧·사용 내역 ── */}
+          {tab === "회사 정보" && <CompanySettings />}
+          {tab === "조직·사내 공유" && <OrgSettings />}
+          {tab === "AI 연결" && <AiConnectionSettings />}
+
+          {tab === "크레딧" && (
+            <SettingsCreditTab onTopUp={() => { onClose(); onOpenTopUp(); }} />
+          )}
+
+          {/* ── 구독·결제 ── */}
+          {tab === "구독 및 결제" && (
+            <SettingsBillingTab onChangePlan={() => { onClose(); onOpenPlanChange(); }} />
+          )}
+          </div>
+          </div>
         </div>
 
-        {/* footer */}
-        <div className="shrink-0 border-t border-[#f1f5f9] px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <img alt="딸깍.net" className="h-4 w-auto object-contain" src={imgImageNet} />
-            <span style={{ ...f, fontWeight: 500, fontSize: 11, color: "#9ca3af" }}>v1.0.242</span>
-            <span style={{ ...f, fontWeight: 400, fontSize: 11, color: "#d1d5db" }}>4cc9c46</span>
-          </div>
-          <span style={{ ...f, fontWeight: 400, fontSize: 10, color: "#d1d5db" }}>Build: 2026. 07. 23. 오전 10:26</span>
+        {/* footer — 모든 탭에서 같은 하단 위치에 고정.
+            설정 화면의 각주라, 어느 폭에서도 콘텐츠보다 눈에 띄지 않게 둔다:
+            로고는 모노톤으로 눌러 두고, 버전·해시는 mono pill 로 감싸 "기술 정보" 신호만 준다.
+            항목 구성은 전 뷰포트 공통이고 밀도만 다르다 —
+            빌드 시각은 좁은 폭에서 줄바꿈을 만드는데다 커밋 해시로 같은 빌드를 특정할 수 있어
+            데스크톱에서만 덧붙인다. 구분선도 여백이 넉넉한 데스크톱에서만 쓴다. */}
+        <div
+          className="shrink-0 px-5 pt-2 wide:px-7 wide:pt-4 wide:border-t wide:border-[#f1f5f9] flex items-center gap-2"
+          style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}
+        >
+          <img alt="딸깍.net" className="h-3.5 w-auto object-contain grayscale opacity-40" src={imgImageNet} />
+          <span className="font-mono rounded-[6px] px-1.5 py-0.5 bg-[#f1f5f9]"
+            style={{ fontSize: 12, lineHeight: 1.4, color: FOOTER_MUTED }}>v0.3.24</span>
+          <span className="font-mono rounded-[6px] px-1.5 py-0.5 bg-[#f1f5f9]"
+            style={{ fontSize: 12, lineHeight: 1.4, color: FOOTER_MUTED }}>fb7fcbdff</span>
+          <span className="hidden wide:inline" style={{ ...f, fontWeight: 400, fontSize: 12, color: FOOTER_MUTED }}>
+            Build: 2026. 11. 26. 오전 10:37
+          </span>
         </div>
+      </div>
       </div>
     </>
   );
@@ -493,208 +974,887 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
 // ─── SidebarDrawer ────────────────────────────────────────────────────────────
 
-function SidebarDrawer({ open, onClose, currentScreen, onNavigate, onSettingsOpen }: {
-  open: boolean; onClose: () => void;
-  currentScreen: Screen; onNavigate: (s: Screen) => void;
-  onSettingsOpen: () => void;
+/** 도킹 사이드바가 펼쳐졌을 때 / 접혔을 때(아이콘 레일)의 폭 */
+const SIDEBAR_W = 280;
+const SIDEBAR_RAIL_W = 76;
+
+/**
+ * 좌측 사이드바. 두 가지 배치를 한 컴포넌트로 처리한다.
+ *
+ * - variant="drawer" (기본): 오버레이 드로어. 백드롭 + translateX 슬라이드.
+ *   데스크톱보다 좁은 화면에서 쓴다 — 상시 노출할 가로 폭이 없기 때문이다.
+ * - variant="docked": 상시 노출되는 in-flow 컬럼. 백드롭·슬라이드가 없고,
+ *   닫는 대신 collapsed 로 아이콘 레일(76px)까지만 접힌다.
+ *
+ * 도킹 상태에서 "닫기"를 두지 않는 이유: 사이드바가 레이아웃의 한 컬럼이라
+ * 완전히 사라지면 본문이 통째로 밀린다. 대신 레일로 접어 이동 수단은 남긴다.
+ *
+ * recentForms 를 넘기면 "최근 서식"이 클릭 가능한 목록으로 바뀌고 currentFormId 가
+ * 활성 표시된다. 안 넘기면 기존처럼 recentTemplates 를 정적으로 렌더한다.
+ */
+/** 사이드바 "최근 작업" 아이콘(2026-11-19) — 편집기 일러스트 대신 사이드바 다른 아이콘과 같은 선 아이콘(#90A1B9 · 1.66) */
+const RECENT_ICON: Record<string, LucideIcon> = {
+  hangul: FilePen, word: FileText, excel: FileSpreadsheet, ppt: Presentation, pdf: FileType2, uidesign: FrameIcon, image: ImageIcon, video: Clapperboard,
+};
+const recentIcon = (kind: string, color = "#90A1B9") => { const I = RECENT_ICON[kind] ?? FileText; return <I size={19} strokeWidth={1.66} color={color} className="shrink-0" />; };
+
+/** 홈 B안 사이드바 목록 — 고정(최대 5) · 최근(파일과 대화를 한 목록에, 2026-11-20 사용자 "최근 하나로 합치자"). 줄에 마우스를 올리면 📌 · ⋯(이름 바꾸기 · 삭제) */
+type SideItem = { key: string; orig: string; label: string; kind: string; at: number; file?: RecentEditorFile };
+function PlanBRecentList({ recentFiles, pins, onTogglePin, onOpenFile, onSeeAll }: {
+  recentFiles: RecentEditorFile[]; pins: string[]; onTogglePin: (key: string) => void; onOpenFile: (rf: RecentEditorFile) => void; onSeeAll: () => void;
 }) {
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const nav = (s: Screen) => { onNavigate(s); onClose(); };
-  const openSettings = () => { setProfileMenuOpen(false); onClose(); onSettingsOpen(); };
-  const isHomeVariant = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai"].includes(currentScreen);
-  const active = (s: Screen) => s === currentScreen || (isHomeVariant && s === "home");
-
-  return (
-    <>
-      <div onClick={onClose} className="fixed inset-0 z-40 bg-black/30 transition-opacity duration-300"
-        style={{ opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none" }} />
-      <div className="fixed top-0 left-0 h-full z-50 w-[280px] bg-white border-r border-[#dfe6ed] flex flex-col transition-transform duration-300"
-        style={{ transform: open ? "translateX(0)" : "translateX(-100%)" }}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 h-[60px] shrink-0">
-          <img alt="딸깍.net" className="h-6 w-auto object-contain" src={imgImageNet} />
-          <button onClick={onClose} className="flex items-center justify-center size-9 rounded-[10px]"><IconClose /></button>
-        </div>
-        {/* Nav */}
-        <div className="flex flex-col gap-1 px-2 shrink-0">
-          {[
-            { s: "home" as Screen, icon: <IconHome />, label: "홈", activeIcon: <IconHomeBlue /> },
-            { s: "mywork" as Screen, icon: <IconWork />, label: "내 작업", activeIcon: <IconWorkBlue /> },
-            { s: "favorites" as Screen, icon: <IconStar />, label: "즐겨찾기", activeIcon: <IconStarBlue /> },
-          ].map(({ s, icon, label, activeIcon }) => (
-            <button key={s} onClick={() => nav(s)}
-              className={`h-11 rounded-[14px] flex items-center gap-3 px-3 w-full ${active(s) ? "bg-[#f1f5f9]" : ""}`}>
-              {active(s) ? activeIcon : icon}
-              <span style={{ ...f, fontWeight: active(s) ? 600 : 500, fontSize: 14, color: active(s) ? "#155dfc" : "#1e293b", letterSpacing: "-0.35px" }}>
-                {label}
-              </span>
-            </button>
-          ))}
-        </div>
-        {/* Scrollable */}
-        <div className="flex-1 overflow-y-auto mt-1" style={{ scrollbarWidth: "none" }}>
-          <div className="px-2 pt-1">
-            <div className="h-8 flex items-center px-2">
-              <span style={{ ...f, fontWeight: 500, fontSize: 12, color: "#90a1b9" }}>최근 서식</span>
-            </div>
-            {recentTemplates.map((t) => (
-              <div key={t} className="h-8 rounded-[14px] flex items-center gap-3 px-3">
-                <div className="shrink-0"><IconFileDoc /></div>
-                <span className="truncate" style={{ ...f, fontWeight: 500, fontSize: 13, color: "#45556c", letterSpacing: "-0.35px" }}>{t}</span>
-              </div>
-            ))}
-          </div>
-          <div className="px-2 mt-2">
-            <div className="h-8 flex items-center px-2">
-              <span style={{ ...f, fontWeight: 600, fontSize: 11, color: "#90a1b9", letterSpacing: "0.275px" }}>최근 대화</span>
-            </div>
-            {recentChats.map((c) => (
-              <div key={c} className="h-8 rounded-[14px] flex items-center pl-3 pr-4">
-                <span className="truncate" style={{ ...f, fontWeight: 500, fontSize: 13, color: "#45556c", letterSpacing: "-0.35px" }}>{c}</span>
-              </div>
-            ))}
-            <div className="flex items-center justify-center py-1.5">
-              <span style={{ ...f, fontWeight: 400, fontSize: 12, color: "#737373" }}>이전 대화 더 보기</span>
-            </div>
-          </div>
-        </div>
-        {/* User */}
-        <div className="shrink-0 border-t border-[#dfe6ed] p-2 relative">
-          {/* 프로필 팝업 */}
-          {profileMenuOpen && (
-            <>
-              <div onClick={() => setProfileMenuOpen(false)} className="fixed inset-0 z-[60]" />
-              <div className="absolute left-2 right-2 z-[61] bg-white rounded-[20px] border border-[#e2e8f0] overflow-hidden"
-                style={{ bottom: "calc(100% - 8px)", boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", animation: "slideUp 180ms cubic-bezier(0.32,0.72,0,1)" }}>
-                {/* 프로필 헤더 */}
-                <div className="px-5 pt-5 pb-4">
-                  <p style={{ ...f, fontWeight: 700, fontSize: 17, color: "#0a0a0a", letterSpacing: "-0.5px" }}>최유정</p>
-                  <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#9ca3af", marginTop: 2 }}>cyj2406@gmail.com</p>
-                </div>
-                <div className="h-px bg-[#f1f5f9] mx-0" />
-                {/* 메뉴 그룹 1 */}
-                {[
-                  { icon: <HelpCircle size={20} strokeWidth={1.6} color="#9ca3af" />, label: "튜토리얼 다시 보기", onClick: undefined as (() => void) | undefined },
-                  { icon: <SettingsIcon size={20} strokeWidth={1.6} color="#9ca3af" />, label: "설정", onClick: openSettings },
-                ].map(({ icon, label, onClick }) => (
-                  <button key={label} onClick={onClick} className="w-full flex items-center gap-3.5 px-5 py-3.5">
-                    <div className="shrink-0">{icon}</div>
-                    <span style={{ ...f, fontWeight: 500, fontSize: 15, color: "#1e293b", letterSpacing: "-0.3px" }}>{label}</span>
-                  </button>
-                ))}
-                <div className="h-px bg-[#f1f5f9]" />
-                {/* 메뉴 그룹 2 */}
-                {[
-                  { icon: <Users size={20} strokeWidth={1.6} color="#9ca3af" />, label: "커뮤니티" },
-                  { icon: <Mail size={20} strokeWidth={1.6} color="#9ca3af" />, label: "문의하기" },
-                ].map(({ icon, label }) => (
-                  <button key={label} className="w-full flex items-center gap-3.5 px-5 py-3.5">
-                    <div className="shrink-0">{icon}</div>
-                    <span style={{ ...f, fontWeight: 500, fontSize: 15, color: "#1e293b", letterSpacing: "-0.3px" }}>{label}</span>
-                  </button>
-                ))}
-                <div className="h-px bg-[#f1f5f9]" />
-                {/* 로그아웃 */}
-                <button className="w-full flex items-center gap-3.5 px-5 py-3.5 pb-5">
-                  <LogOut size={20} strokeWidth={1.6} color="#9ca3af" />
-                  <span style={{ ...f, fontWeight: 500, fontSize: 15, color: "#1e293b", letterSpacing: "-0.3px" }}>로그아웃</span>
-                </button>
-              </div>
-            </>
-          )}
-          {/* 프로필 바 */}
-          <button className="w-full h-[50px] rounded-[18px] flex items-center gap-2.5 px-2"
-            onClick={() => setProfileMenuOpen((v) => !v)}>
-            <div className="bg-[#e0e7ff] border border-[#c7d2fe] rounded-full size-8 overflow-hidden shrink-0">
-              <img alt="최유정" className="size-full object-cover" src={imgUserAvatar} />
-            </div>
-            <div className="flex-1 min-w-0 text-left">
-              <div className="truncate" style={{ ...f, fontWeight: 600, fontSize: 13, color: "#0a0a0a", lineHeight: "18.6px" }}>최유정</div>
-              <div className="truncate" style={{ ...f, fontWeight: 400, fontSize: 11, color: "#737373", lineHeight: "15.7px" }}>cyj2406@gmail.com</div>
-            </div>
-            <div className="shrink-0 flex flex-col gap-[3px] items-center justify-center size-6">
-              {[0,1,2].map(i => <div key={i} className="size-[3.5px] rounded-full bg-[#9ca3af]" />)}
-            </div>
-          </button>
-        </div>
-      </div>
-    </>
+  const co = readChatOverrides();
+  const items: SideItem[] = [
+    ...recentFiles.map((rf) => ({ key: `${rf.kind}:${rf.id}`, orig: rf.name, label: rf.name, kind: rf.kind, at: rf.updatedAt, file: rf })),
+    ...recentChats.filter((c) => !co.hidden.includes(c)).map((c) => ({ key: `chat:${c}`, orig: c, label: co.renamed[c] ?? c, kind: "chat", at: 0 })),
+  ];
+  const pinned = pins.map((k) => items.find((x) => x.key === k)).filter(Boolean) as SideItem[];
+  const rest = items.filter((x) => !pins.includes(x.key)).slice(0, 10);
+  const label = { ...f, fontWeight: 500, fontSize: 13, lineHeight: "20px", color: color.text.secondary, letterSpacing: "-0.2px" } as const;
+  // 묶음 이름은 모두 같은 자리(바깥 px-2 + 안쪽 px-3 = 줄 아이콘과 같은 왼쪽 선). 예전 "고정"만 📌 아이콘 + px-3이라 어긋났다
+  const section = (title: string, list: SideItem[], isPinned: boolean) => (
+    <div key={title} className="px-2" style={{ marginTop: 24 }}>
+      <p className="px-3 h-7 flex items-center" style={label}>{title}</p>
+      {list.map((it) => <SideRow key={it.key} it={it} isPinned={isPinned} onTogglePin={onTogglePin} onOpenFile={onOpenFile} />)}
+    </div>
   );
-}
-
-function TopBar({ onMenuOpen, onBack, showBack, onCreditClick, onBellClick }: {
-  onMenuOpen: () => void; onBack?: () => void; showBack?: boolean;
-  onCreditClick?: () => void; onBellClick?: () => void;
-}) {
   return (
-    <header className="h-14 flex items-center justify-between px-4 shrink-0 bg-[#f8fafc]">
-      <div className="flex items-center gap-2">
-        {showBack && onBack ? (
-          <button onClick={onBack} className="flex items-center justify-center size-9 rounded-[10px]"><IconChevronLeft /></button>
-        ) : (
-          <button onClick={onMenuOpen} className="flex items-center justify-center size-9 rounded-[10px] opacity-80"><IconMenu /></button>
-        )}
-        <img alt="딸깍.net" className="h-[22px] w-auto object-contain" src={imgImageNet} />
-      </div>
-      <div className="flex items-center gap-2">
-        <button onClick={onCreditClick} className="bg-[#f8fafc] h-9 rounded-[20px] border border-[#dfe6ed] flex items-center gap-2 px-3"
-          style={{ boxShadow: "0px 1px 1.5px rgba(0,0,0,0.1)" }}>
-          <div className="bg-[#4f7bff] rounded-full size-5 flex items-center justify-center">
-            <span style={{ ...f, fontWeight: 700, fontSize: 10, color: "white" }}>C</span>
-          </div>
-          <span style={{ ...f, fontWeight: 600, fontSize: 14, color: "#0a0a0a" }}>{CREDIT_BALANCE.toLocaleString()}</span>
+    <div className="pb-4">
+      {pinned.length > 0 && section("고정", pinned, true)}
+      {rest.length > 0 && section("최근", rest, false)}
+      <div className="px-2 mt-2">
+        <button type="button" onClick={onSeeAll} className="dk-nav-item dk-nav-item--sub w-full h-10 rounded-[14px] flex items-center gap-1 px-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]">
+          <span className="dk-nav-item__label" style={{ ...f, fontSize: 14, fontWeight: 600, letterSpacing: "-0.2px" }}>내 작업에서 모두 보기</span><ChevronRightIcon size={15} />
         </button>
-        <button onClick={onBellClick} className="relative size-9 flex items-center justify-center">
-          <IconBell />
-          <div className="absolute top-[6px] left-[22px] bg-[#2b7fff] rounded-full size-2" />
-        </button>
-      </div>
-    </header>
-  );
-}
-
-function ChatInputBox() {
-  return (
-    <div className="w-full">
-      <div className="bg-white rounded-[20px] border-2 border-[#4f7bff]" style={{ boxShadow: "0px 8px 32px 0px rgba(79,123,255,0.1)" }}>
-        <div className="bg-[rgba(255,255,255,0.8)] rounded-[17px] border border-[rgba(223,230,237,0.5)] m-0.5" style={{ boxShadow: "0px 1px 2px 0px rgba(0,0,0,0.05)" }}>
-          <div className="px-5 pt-4 pb-2" style={{ minHeight: 80 }}>
-            <p style={{ ...f, fontWeight: 400, fontSize: 13.5, color: "#a7b3c7", lineHeight: 1.6 }}>
-              무엇을 만들까요? 대화로 자연스럽게 요청하거나 템플릿을 선택해 바로 생성해보세요!
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 px-3.5 pb-3.5 pt-2">
-            <div className="flex items-center gap-1 flex-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-              <button className="bg-white border border-[#e2e8f0] rounded-full size-[32px] flex items-center justify-center shrink-0"><IconAttach /></button>
-              <button className="bg-[#eff6ff] border border-[rgba(79,123,255,0.25)] rounded-full size-[32px] flex items-center justify-center shrink-0"><IconSparkle /></button>
-              <button className="bg-white border border-[#e2e8f0] rounded-full h-[32px] flex items-center gap-1 px-2.5 shrink-0">
-                <IconAutoPrompt />
-                <span style={{ ...f, fontWeight: 600, fontSize: 11, color: "#62748e" }}>자동 프롬프트</span>
-              </button>
-              <button className="bg-white border border-[#e2e8f0] rounded-full h-[32px] flex items-center gap-1 px-2.5 shrink-0">
-                <IconDocRef />
-                <span style={{ ...f, fontWeight: 600, fontSize: 11, color: "#62748e" }}>원문 적용</span>
-              </button>
-            </div>
-            <button className="bg-[#4f7bff] rounded-full size-[32px] flex items-center justify-center shrink-0"><IconSend /></button>
-          </div>
-        </div>
       </div>
     </div>
   );
 }
 
-function TemplateCard({ title, isVideo = false, ratio = "66%", onApply }: { title: string; isVideo?: boolean; ratio?: string; onApply?: () => void }) {
-  const [isFav, setIsFav] = useState(false);
+/** 사이드바 한 줄: 누르면 열기, 오른쪽 📌 · ⋯. ⋯ = 이름 바꾸기(줄 안에서 바로 고침) · 삭제(한 번 더 눌러 확인) */
+function SideRow({ it, isPinned, onTogglePin, onOpenFile }: { it: SideItem; isPinned: boolean; onTogglePin: (key: string) => void; onOpenFile: (rf: RecentEditorFile) => void }) {
+  const [menu, setMenu] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(it.label);
+  const ref = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // ⋯ 메뉴 위치(2026-11-20 사용자 "사이드바 아래에서 메뉴가 잘린다"): 사이드바 안(overflow)에 두지 않고 화면 위(portal, fixed)에 띄운다.
+  // ChatGPT · Claude · Notion 사이드바처럼 ⋯ 바로 아래 왼쪽 끝을 맞춰 열고(사이드바 밖 본문 위로 넘쳐도 된다),
+  // 아래 자리가 모자라면 ⋯ 위로 뒤집는다. 화면 오른쪽 끝도 넘지 않게 8px 안쪽으로
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!menu) { setPos(null); return; }
+    const place = () => {
+      const b = moreRef.current?.getBoundingClientRect(); const m = menuRef.current;
+      if (!b || !m) return;
+      const h = m.offsetHeight, w = m.offsetWidth, gap = 4;
+      const top = b.bottom + gap + h > window.innerHeight - 8 ? b.top - gap - h : b.bottom + gap;
+      setPos({ left: Math.min(b.left, window.innerWidth - w - 8), top: Math.max(8, top) });
+    };
+    place();
+    window.addEventListener("resize", place); window.addEventListener("scroll", place, true);
+    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+  }, [menu, confirmDel]);
+  useEffect(() => {
+    if (!menu) return;
+    const down = (e: PointerEvent) => { const t = e.target as Node; if (!ref.current?.contains(t) && !menuRef.current?.contains(t)) { setMenu(false); setConfirmDel(false); } };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { setMenu(false); setConfirmDel(false); } };
+    document.addEventListener("pointerdown", down, true); document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("pointerdown", down, true); document.removeEventListener("keydown", key); };
+  }, [menu]);
+  const commit = () => {
+    setEditing(false);
+    const n = draft.trim();
+    if (!n || n === it.label) return;
+    if (it.file) renameEditorFile(it.file, n); else renameChat(it.orig, n);
+  };
+  const remove = () => { setMenu(false); setConfirmDel(false); if (isPinned) onTogglePin(it.key); if (it.file) deleteEditorFile(it.file); else hideChat(it.orig); };
+  const icon = <span className="shrink-0 flex items-center justify-center" style={{ width: 20, height: 20 }} aria-hidden>{it.kind === "chat" ? <MessageSquare size={18} strokeWidth={1.66} color="#90A1B9" /> : recentIcon(it.kind)}</span>;
+  const iconBtn = "size-7 rounded-md flex items-center justify-center hover:bg-black/[0.06] outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[#4f7bff]";
+  const item = "w-full h-9 px-2.5 rounded-lg flex items-center gap-2 text-left hover:bg-[#f1f5f9] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]";
+  if (editing) {
+    return (
+      <div className="h-10 rounded-[14px] flex items-center gap-3 pl-3 pr-2" style={{ background: "#f1f5f9" }}>
+        {icon}
+        <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onFocus={(e) => e.currentTarget.select()} onBlur={commit}
+          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") commit(); if (e.key === "Escape") { setDraft(it.label); setEditing(false); } }}
+          aria-label="새 이름" className="field-inline flex-1 min-w-0 bg-transparent outline-none" style={{ ...f, fontSize: 14, lineHeight: "20px", color: color.text.primary }} />
+      </div>
+    );
+  }
+  return (
+    <div ref={ref} className="group relative">
+      <button type="button" title={it.label} onClick={() => it.file && onOpenFile(it.file)}
+        className={`dk-nav-item dk-nav-item--sub w-full h-10 rounded-[14px] flex items-center gap-3 pl-3 ${menu ? "pr-[68px]" : "pr-3 group-hover:pr-[68px]"} text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]`}>
+        {icon}
+        <span className="dk-nav-item__label truncate" style={{ ...f, fontWeight: 400, fontSize: 14, lineHeight: "20px", letterSpacing: "-0.2px" }}>{it.label}</span>
+      </button>
+      {/* 📌 · ⋯ 모두 마우스를 올렸을 때만(2026-11-20 사용자 "고정돼도 계속 뜨지 말고 호버 시"). 고정한 줄은 "고정" 묶음에 있어서 따로 표시가 없어도 안다 */}
+      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center">
+        <button ref={moreRef} type="button" aria-label={`${it.label} 더 보기`} title="더 보기" aria-expanded={menu} onClick={() => { setMenu((v) => !v); setConfirmDel(false); }}
+          className={`${iconBtn} ${menu ? "opacity-100 bg-black/[0.06]" : "opacity-0 group-hover:opacity-100"}`}>
+          <MoreHorizontal size={16} color="#64748b" />
+        </button>
+        <button type="button" aria-label={isPinned ? `${it.label} 고정 풀기` : `${it.label} 고정하기`} title={isPinned ? "고정 풀기" : "고정하기"} onClick={() => onTogglePin(it.key)}
+          className={`${iconBtn} ${menu ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+          {isPinned ? <PinOff size={14} color="#64748b" /> : <Pin size={14} color="#64748b" />}
+        </button>
+      </div>
+      {menu && createPortal(
+        <div ref={menuRef} role="menu" aria-label={`${it.label} 메뉴`} className="fixed z-[200] w-[184px] bg-white rounded-xl p-1.5" style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb" }}>
+          <button type="button" role="menuitem" onClick={() => { setMenu(false); setDraft(it.label); setEditing(true); }} className={item} style={{ ...f, fontSize: 14, color: color.text.primary }}>
+            <Pencil size={15} color="#64748b" />이름 바꾸기
+          </button>
+          <button type="button" role="menuitem" onClick={() => (confirmDel ? remove() : setConfirmDel(true))} className={item} style={{ ...f, fontSize: 14, fontWeight: confirmDel ? 600 : 400, color: "#dc2626" }}>
+            <Trash2 size={15} color="#dc2626" />{confirmDel ? "한 번 더 누르면 삭제돼요" : "삭제"}
+          </button>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+function SidebarDrawer({ open, onClose, currentScreen, onNavigate, onSettingsOpen, onStartTutorial, variant = "drawer", collapsed = false, onToggleCollapsed, recentForms, currentFormId, onSelectForm, recentFiles = [], onOpenRecentFile, planB = false, onNewEditor }: {
+  open: boolean; onClose: () => void;
+  currentScreen: Screen; onNavigate: (s: Screen) => void;
+  onSettingsOpen: () => void;
+  onStartTutorial: () => void;
+  variant?: "drawer" | "docked";
+  /** 도킹일 때만 의미가 있다 — 아이콘 레일로 접힌 상태 */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  recentForms?: { id: string; title: string }[];
+  currentFormId?: string;
+  onSelectForm?: (id: string, title: string) => void;
+  /** 최근 작업 — 편집기에서 만든 파일(편집기 아이콘 + 이름). 누르면 그 편집기를 그 파일로 연다(2026-11-19) */
+  recentFiles?: RecentEditorFile[];
+  onOpenRecentFile?: (f: RecentEditorFile) => void;
+  /** 홈 B안 사이드바(2026-11-20 시안, docs/home-plan-b.md): [＋ 새로 만들기 · 홈 · 내 작업], 고정 묶음, 최근 하나로(오늘 · 이번 주 · 이전), 접힌 줄에 최근 파일 아이콘, 접힌 줄에 마우스를 올리면 떠오름 */
+  planB?: boolean;
+  onNewEditor?: (kind: EditorKind) => void;
+}) {
+  const nav = (s: Screen) => { onNavigate(s); onClose(); };
+  // ── B안 상태 ──
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<number | undefined>(undefined);
+  const [newOpen, setNewOpen] = useState(false);
+  // 새로 만들기 메뉴: 바깥을 누르거나 Esc면 닫는다(2026-11-20)
+  const newWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!newOpen) return;
+    const down = (e: PointerEvent) => { if (!newWrapRef.current?.contains(e.target as Node)) setNewOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setNewOpen(false); };
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("pointerdown", down, true); document.removeEventListener("keydown", key); };
+  }, [newOpen]);
+  const [pins, setPins] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("ddalkkak.sidebarPins") ?? "[]") as string[]; } catch { return []; } });
+  const togglePin = (key: string) => setPins((p) => {
+    const n = p.includes(key) ? p.filter((x) => x !== key) : [key, ...p].slice(0, 5);
+    try { localStorage.setItem("ddalkkak.sidebarPins", JSON.stringify(n)); } catch { /* 이번 세션만 */ }
+    window.setTimeout(() => window.dispatchEvent(new Event(PINS_EVENT)), 0);
+    return n;
+  });
+  // 내 작업 화면에서 고정을 바꾸면 사이드바도 따라간다
+  useEffect(() => {
+    const on = () => { try { setPins(JSON.parse(localStorage.getItem("ddalkkak.sidebarPins") ?? "[]") as string[]); } catch { /* 그대로 */ } };
+    window.addEventListener(PINS_EVENT, on);
+    return () => window.removeEventListener(PINS_EVENT, on);
+  }, []);
+  const isHomeVariant = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai"].includes(currentScreen);
+  const active = (s: Screen) => s === currentScreen || (isHomeVariant && s === "home");
+  const docked = variant === "docked";
+  // 접기는 도킹 컬럼에서만 일어난다. 오버레이 드로어는 열림/닫힘만 있다.
+  const railedRaw = docked && collapsed;
+  // B안: 접힌 줄에 마우스를 올리면 사이드바 전체가 화면 위로 떠오른다(본문은 밀지 않음, Notion 방식)
+  const peeking = planB && railedRaw && peek;
+  const railed = railedRaw && !peeking;
+
+  return (
+    <>
+      {!docked && (
+        <div onClick={onClose} className="fixed inset-0 z-40 bg-black/30 transition-opacity duration-300"
+          style={{ opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none" }} />
+      )}
+      <div className={docked
+        ? "relative h-full shrink-0 bg-white border-r border-[#dfe6ed] flex flex-col transition-[width] duration-300"
+        : "fixed top-0 left-0 h-full z-50 bg-white border-r border-[#dfe6ed] flex flex-col transition-transform duration-300"}
+        style={docked
+          ? { width: railedRaw ? SIDEBAR_RAIL_W : SIDEBAR_W }
+          : { width: SIDEBAR_W, transform: open ? "translateX(0)" : "translateX(-100%)" }}
+        // 접힌 줄에 마우스를 올리면 떠오르던 동작은 뺐다(2026-11-20, 사용자 "호버 시 열리는 거 불편"): 지나가기만 해도 튀어나와 방해됐다.
+        // 펼치기는 맨 위 로고(마우스를 올리면 ≡) 누르기로만. 접힌 줄의 ＋ 메뉴는 줄 밖으로 떠서 그대로 쓸 수 있다
+        onMouseLeave={planB && railedRaw ? () => setNewOpen(false) : undefined}>
+        <div className={peeking ? "absolute inset-y-0 left-0 z-[60] bg-white border-r border-[#dfe6ed] flex flex-col" : "contents"} style={peeking ? { width: SIDEBAR_W, boxShadow: "8px 0 32px rgba(15,23,42,0.12)" } : undefined}>
+        {/* Header — 로고 + 토글. 레일에서는 평소엔 로고 마크만 보이다가, 호버하면
+            로고가 사라지고 그 자리에 펼치기 토글이 나타난다(같은 76px 폭 안에서 자리를 바꿔치기). */}
+        <div className={`flex items-center h-[60px] shrink-0 ${railed ? "justify-center px-0" : "justify-between px-4"}`}>
+          {docked && railed ? (
+            <button onClick={onToggleCollapsed} aria-label="사이드바 펼치기" aria-expanded={false}
+              className="group relative flex items-center justify-center size-9 rounded-[10px]">
+              <img alt="딸깍.net" className="size-6 object-contain transition-opacity duration-150 group-hover:opacity-0" src={imgLogoMark} />
+              <IconMenu className="absolute inset-0 m-auto opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+            </button>
+          ) : (
+            <>
+              <img alt="딸깍.net" className="h-6 w-auto object-contain" src={imgImageNet} />
+              {docked ? (
+                <IconButton onClick={onToggleCollapsed} aria-label="사이드바 접기" aria-expanded={true}
+                  className="flex items-center justify-center size-9 opacity-80"><IconMenu /></IconButton>
+              ) : (
+                <IconButton onClick={onClose} aria-label="사이드바 닫기" className="flex items-center justify-center size-9"><IconClose /></IconButton>
+              )}
+            </>
+          )}
+        </div>
+        {/* 스크롤 영역 — 주요 메뉴·최근 서식·최근 대화를 하나로 묶는다(2026-09-18).
+            예전엔 주요 메뉴가 이 영역 밖에서 shrink-0로 고정돼 있었는데, 화면이 낮아지면
+            "최근 대화" 쪽만 스크롤되고 메뉴는 그대로 보이는 구조였다 — 이제는 헤더
+            (로고·접기 버튼, 위)만 고정하고 그 아래는 전부 이 하나의 세로 스크롤 안에서
+            함께 움직인다. 사이드바에는 현재 하단 고정 프로필 요소가 없어(계정 메뉴는
+            TopBar 우측 상단 ProfileMenuButton에 있다) 별도로 고정할 하단 영역은 없다.
+            overscrollBehavior: contain — 목록 끝까지 스크롤했을 때 메인 콘텐츠 쪽으로
+            스크롤이 전이되지 않게 한다(다른 화면의 filter-menu와 같은 패턴). */}
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "none", overscrollBehavior: "contain" }}>
+          {/* 주요 메뉴 — 16px/500/line-height 24px, 아이콘(20px, "22px 내외" 범위 안)과
+              글자 간격 12px, 행 높이 48px, 행 사이 4px(gap-1). 활성 여부와 무관하게
+              굵기를 항상 500으로 고정한다(하나만 굵어지면 그 행만 폭이 달라져 목록이
+              흔들린다) — 활성 표시는 색·배경만 담당한다(.dk-nav-item.is-active, 아래
+              CSS). */}
+          <div className="flex flex-col gap-1 px-2 pt-1">
+            {[
+              { s: "home" as Screen, icon: <IconHome />, label: "홈" },
+              { s: "mywork" as Screen, icon: <IconWork />, label: "내 작업" },
+              ...(planB ? [] : [{ s: "favorites" as Screen, icon: <IconStar />, label: "즐겨찾기" }]),
+            ].map(({ s, icon, label }) => (
+              <button key={s} onClick={() => nav(s)}
+                aria-current={active(s) ? "page" : undefined}
+                aria-label={railed ? label : undefined}
+                title={railed ? label : undefined}
+                className={`dk-nav-item h-12 rounded-[14px] flex items-center w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff] ${railed ? "justify-center" : "gap-3 px-3"} ${active(s) ? "is-active" : ""}`}>
+                {/* 아이콘·라벨 색 모두 CSS 가 담당한다(인라인 style 은 :hover 를 이긴다).
+                    아이콘은 currentColor 라 버튼의 color 를 따라간다. */}
+                {icon}
+                {!railed && (
+                  <span className="dk-nav-item__label" style={{ ...f, fontWeight: 500, fontSize: 16, lineHeight: "24px", letterSpacing: "-0.35px" }}>
+                    {label}
+                  </span>
+                )}
+              </button>
+            ))}
+            {/* 2026-11-20: 사용자 "홈이 맨 위가 편할 듯" → 홈 · 내 작업(가는 곳) 다음에 새로 만들기(만드는 버튼). 메뉴와 같은 모양이라 Notion · Figma처럼 메뉴 아래 */}
+            {planB && (
+              <div className="relative" ref={newWrapRef}>
+                <button type="button" onClick={() => setNewOpen((v) => !v)} aria-expanded={newOpen} aria-label={railed ? "새로 만들기" : undefined} title={railed ? "새로 만들기" : undefined}
+                  className={`dk-nav-item h-12 rounded-[14px] flex items-center w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff] ${railed ? "justify-center" : "gap-3 px-3"}`}
+>
+                  {/* 2026-11-20 색 정리 3차(사용자 "그냥 다른 거랑 똑같이"): 홈 · 내 작업과 완전히 같은 색 · 굵기 · 크기 */}
+                  <Plus size={20} strokeWidth={1.8} />
+                  {!railed && <span className="dk-nav-item__label" style={{ ...f, fontWeight: 500, fontSize: 16, lineHeight: "24px", letterSpacing: "-0.35px" }}>새로 만들기</span>}
+                </button>
+                {newOpen && (
+                  // 접힌 줄: 메뉴가 스크롤 영역(overflow) 안이라 줄 밖으로 뜨면 잘려 안 보였다 → 버튼 위치 기준 fixed로 띄운다(2026-11-20)
+                  // 2026-11-20: 2열 그림 격자 → 종류별 한 줄 목록(편집기가 늘어도 줄만 추가). 줄 36px · 아이콘 20px · 넘치면 메뉴 안에서 스크롤
+                  <div className={`z-[70] bg-white rounded-xl py-1.5 w-[232px] overflow-y-auto ${railed ? "fixed" : "absolute left-0 top-full mt-2"}`} style={{ boxShadow: "0px 8px 32px rgba(0,0,0,0.14)", border: "1px solid #e5e7eb", scrollbarWidth: "thin", ...(railed && newWrapRef.current ? (() => { const r = newWrapRef.current.getBoundingClientRect(); const top = Math.max(8, Math.min(r.top, window.innerHeight - 420)); return { left: r.right + 14, top, maxHeight: window.innerHeight - top - 8 }; })() : { maxHeight: "min(480px, 70vh)" }) }} role="menu" aria-label="새로 만들기">
+                    {EDITOR_GROUPS.map((g, gi) => (
+                      <div key={g.label} role="group" aria-label={g.label} style={gi ? { borderTop: "1px solid #f1f5f9", marginTop: 6, paddingTop: 6 } : undefined}>
+                        <p className="px-3 pt-1 pb-1" style={{ ...f, fontSize: 12, fontWeight: 600, color: color.text.secondary }}>{g.label}</p>
+                        {g.ids.map((id) => EDITOR_APPS.find((a) => a.id === id)!).map((a) => (
+                          <button key={a.id} type="button" role="menuitem" title={a.hint} onClick={() => { setNewOpen(false); setPeek(false); onNewEditor?.(a.id); onClose(); }} className="w-[calc(100%-12px)] mx-1.5 h-9 rounded-lg flex items-center gap-2.5 px-2 text-left hover:bg-[#f1f5f9] outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]">
+                            <img src={a.art} alt="" className="size-5 object-contain shrink-0" />
+                            <span style={{ ...f, fontSize: 14, fontWeight: 500, color: "#1e293b" }}>{a.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* B안 접힌 줄의 최근 파일 아이콘은 2026-11-20 뺐다(사용자 "밑에 거 보여 줘야 함?"): 같은 아이콘(#)이 반복돼 어느 파일인지 알 수 없고, 마우스를 올리면 떠오르는 사이드바에 이름과 함께 이미 보인다 */}
+
+          {/* B안 펼친 사이드바: 고정 + 최근(오늘 · 이번 주 · 이전) 하나로 */}
+          {planB && !railed && <PlanBRecentList recentFiles={recentFiles} pins={pins} onTogglePin={togglePin} onOpenFile={(rf) => { setPeek(false); onOpenRecentFile?.(rf); onClose(); }} onSeeAll={() => { setPeek(false); nav("mywork"); }} />}
+
+          {/* 레일(아이콘만 접힘)에서는 이 아래를 전부 숨긴다 — 제목·파일명이 76px 폭에
+              들어가지 않는다(기존 동작 그대로, 자리만 옮겼다). */}
+          {!railed && !planB && (
+            <>
+              {/* 최근 서식 — 주요 메뉴와 28px(24~32px 범위), 섹션 라벨 13px/500/20,
+                  secondary 토큰. 라벨은 px-3로 위 메뉴 버튼의 아이콘 시작선(8+12=20px)과
+                  같은 기준선에 맞춘다. */}
+              <div className="px-3" style={{ marginTop: 28 }}>
+                <p style={{ ...f, fontWeight: 500, fontSize: 13, lineHeight: "20px", color: color.text.secondary, letterSpacing: "-0.2px" }}>최근 서식</p>
+              </div>
+              <div className="px-2" style={{ marginTop: 8 }}>
+                {/* recentForms 가 오면 클릭 가능한 목록, 없으면 지금까지의 정적 목록 그대로.
+                    서식명 14px/400/line-height 20px, 행 높이 40px(h-10). 아이콘 없는
+                    정적 목록도 아이콘 폭(20px)만큼 spacer로 비워 텍스트 시작점을 위
+                    메뉴·서식 목록과 통일한다. */}
+                {recentForms
+                  ? recentForms.map((form) => {
+                      const isCurrent = form.id === currentFormId;
+                      return (
+                        <button key={form.id} type="button"
+                          onClick={() => onSelectForm?.(form.id, form.title)}
+                          aria-current={isCurrent ? "page" : undefined}
+                          title={form.title}
+                          className={`dk-nav-item dk-nav-item--sub h-10 rounded-[14px] flex items-center gap-3 px-3 w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff] ${isCurrent ? "is-active" : ""}`}>
+                          <div className="shrink-0">{isCurrent ? <IconFileDocBlue /> : <IconFileDoc />}</div>
+                          <span className="dk-nav-item__label truncate" style={{ ...f, fontWeight: 400, fontSize: 14, lineHeight: "20px", letterSpacing: "-0.2px" }}>{form.title}</span>
+                        </button>
+                      );
+                    })
+                  : recentTemplates.map((t) => (
+                      <div key={t} title={t} className="h-10 rounded-[14px] flex items-center gap-3 px-3">
+                        <div className="shrink-0"><IconFileDoc /></div>
+                        <span className="truncate" style={{ ...f, fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#45556c", letterSpacing: "-0.2px" }}>{t}</span>
+                      </div>
+                    ))}
+              </div>
+
+              {/* 최근 대화 — 최근 서식과 24px. "더 보기"·전용 여백 없이 recentChats
+                  전체를 그대로 이어서 보여준다(이 배열은 실제로도 처음부터 잘리지 않고
+                  전부 렌더링되고 있었다 — 서버 페이지네이션 API 자체가 이 앱에 없는
+                  정적 목업 데이터라 "다음 페이지 자동 로드"는 적용 대상이 없다. 아래
+                  최종 보고에 그대로 밝힌다). */}
+              <div className="px-3" style={{ marginTop: 24 }}>
+                {/* 최근 작업(2026-11-19, dev 사이드바 참고): 편집기 파일은 그 편집기 아이콘을 앞에 붙여 대화와 구분하고, 눌러서 바로 연다. 대화는 아이콘 없이 그대로 */}
+                <p style={{ ...f, fontWeight: 500, fontSize: 13, lineHeight: "20px", color: color.text.secondary, letterSpacing: "-0.2px" }}>{recentFiles.length ? "최근 작업" : "최근 대화"}</p>
+              </div>
+              <div className="px-2 pb-2" style={{ marginTop: 8 }}>
+                {recentFiles.slice(0, 6).map((rf) => (
+                  <button key={`${rf.kind}:${rf.id}`} type="button" title={`${rf.app} · ${rf.name}`} onClick={() => { onOpenRecentFile?.(rf); onClose(); }}
+                    className="dk-nav-item dk-nav-item--sub w-full h-10 rounded-[14px] flex items-center gap-3 px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]">
+                    <span className="shrink-0 flex items-center justify-center" style={{ width: 20, height: 20 }}>{recentIcon(rf.kind)}</span>
+                    <span className="dk-nav-item__label truncate" style={{ ...f, fontWeight: 400, fontSize: 14, lineHeight: "20px", letterSpacing: "-0.2px" }}>{rf.name}</span>
+                  </button>
+                ))}
+                {recentChats.map((c) => (
+                  <div key={c} title={c} className="h-10 rounded-[14px] flex items-center gap-3 px-3">
+                    {/* 대화도 말풍선 선 아이콘(2026-11-19) — 아이콘 자리만 비워 두면 휑해 보였다. 편집기 파일은 편집기 아이콘, 대화는 말풍선으로 구분 */}
+                    <span className="shrink-0 flex items-center justify-center" style={{ width: 20, height: 20 }} aria-hidden><MessageSquare size={18} strokeWidth={1.66} color="#90A1B9" /></span>
+                    <span className="truncate" style={{ ...f, fontWeight: 400, fontSize: 14, lineHeight: "20px", color: "#45556c", letterSpacing: "-0.2px" }}>{c}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        </div>
+      </div>
+      <style>{`
+        /* 사이드바 메뉴 — 배경·이동·색만 전이시킨다(폰트/굵기/크기는 그대로).
+           아이콘은 currentColor 라 버튼의 color 를 따라간다. */
+        .dk-nav-item {
+          background-color: transparent;
+          color: #64748b;
+          transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+        }
+        .dk-nav-item .dk-nav-item__label { color: #1e293b; transition: color 160ms ease; }
+        /* 하위 목록(최근 서식) — 기본 글자색만 기존 목록과 맞추고 hover/활성은 메뉴와 동일하게 쓴다. */
+        .dk-nav-item--sub .dk-nav-item__label { color: #45556c; }
+        /* 현재 페이지 — 브랜드 블루 텍스트/아이콘 + 블루 틴트 배경. 이동은 주지 않는다. */
+        .dk-nav-item.is-active { background-color: #eef3ff; color: #4f7bff; }
+        .dk-nav-item.is-active .dk-nav-item__label { color: #4f7bff; }
+
+        /* 호버는 마우스 환경에서만. 터치에서 탭 뒤 호버 잔상이 남으면 활성 상태와 헷갈린다.
+           태블릿에서 호버가 보이지 않는 것은 의도된 동작이고, 그쪽은 아래 :active 가 맡는다. */
+        @media (hover: hover) and (pointer: fine) {
+          .dk-nav-item:hover { background-color: #f1f5f9; color: #475569; transform: translateX(3px); }
+          .dk-nav-item:hover .dk-nav-item__label { color: #0f172a; }
+          .dk-nav-item.is-active:hover { background-color: #e3ebff; color: #4f7bff; transform: none; }
+          .dk-nav-item.is-active:hover .dk-nav-item__label { color: #4f7bff; }
+        }
+
+        /* 터치 — 누르고 있는 동안만. 배경을 호버보다 한 단계 진하게(#e2e8f0) 해서
+           손가락에 가려도 눌린 것이 보이게 한다. */
+        .dk-nav-item:active { background-color: #e2e8f0; color: #475569; transform: translateX(2px); }
+        .dk-nav-item:active .dk-nav-item__label { color: #0f172a; }
+        .dk-nav-item.is-active:active { background-color: #dbe4ff; color: #4f7bff; transform: none; }
+        .dk-nav-item.is-active:active .dk-nav-item__label { color: #4f7bff; }
+
+        /* 터치에서는 들어갈 때도 빠질 때도 80ms — 손을 떼면 곧바로 원래대로 돌아온다. */
+        @media (pointer: coarse) {
+          .dk-nav-item, .dk-nav-item .dk-nav-item__label { transition-duration: 80ms; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .dk-nav-item { transition: none; }
+          .dk-nav-item:hover, .dk-nav-item:active { transform: none; }
+        }
+      `}</style>
+    </>
+  );
+}
+
+// 프로필 메뉴는 components/account/ProfileMenuButton.tsx (에디터 공통 헤더와 같이 쓴다).
+
+function TopBar({ onMenuOpen, onBack, showBack, onBellClick, bellRef, brand = true, profileMenu }: {
+  onMenuOpen: () => void; onBack?: () => void; showBack?: boolean;
+  onBellClick?: () => void;
+  bellRef?: React.RefObject<HTMLButtonElement | null>;
+  /**
+   * 좌측의 햄버거 + 로고를 그릴지. 사이드바가 도킹된 데스크톱에서는 false —
+   * 브랜드와 여닫기 토글을 사이드바가 이미 갖고 있어 나란히 두면 둘 다 중복이다.
+   * 뒤로가기는 화면 맥락이라 brand 와 무관하게 showBack 이 정한다.
+   */
+  brand?: boolean;
+  /** 프로필 메뉴 동작(에디터 공통 헤더와 같은 것) */
+  profileMenu: React.ComponentProps<typeof ProfileMenuButton>;
+}) {
+  return (
+    // 상단바 규격(2026-10-02) — 높이 56px(기존 레이아웃이 calc(100vh - 56px) 등으로 의존해 유지,
+    // Material 모바일 top app bar와 같은 값). 아이콘 버튼은 모두 44×44 터치 영역(Apple HIG 44pt,
+    // WCAG 2.5.5)에 아이콘 20~22px, 프로필은 보이는 원 32px + 투명 44px 터치 영역. 버튼 사이 8px →
+    // 보이는 아이콘끼리는 약 25px 떨어지고, 화면 끝 ↔ 보이는 아이콘 가장자리는 모바일 20px·데스크톱 24px.
+    <header className="h-14 flex items-center justify-between pl-2 sm:pl-3 pr-[14px] sm:pr-[18px] shrink-0 bg-[#f8fafc]">
+      <div className="flex items-center gap-2">
+        {showBack && onBack ? (
+          <IconButton onClick={onBack} aria-label="뒤로 가기" shape="circle" className="flex items-center justify-center size-11"><IconChevronLeft /></IconButton>
+        ) : brand ? (
+          <IconButton onClick={onMenuOpen} aria-label="메뉴 열기" shape="circle" className="flex items-center justify-center size-11 opacity-80"><IconMenu /></IconButton>
+        ) : null}
+        {brand && <img alt="딸깍.net" className="h-[22px] w-auto object-contain" src={imgImageNet} />}
+      </div>
+      <div className="flex items-center gap-2">
+        <IconButton ref={bellRef} onClick={onBellClick} shape="circle" aria-label="알림" className="relative size-11 flex items-center justify-center">
+          <IconBell size={22} />
+          <div aria-hidden className="absolute top-[9px] left-[25px] bg-[#2b7fff] rounded-full size-2 ring-2 ring-[#f8fafc]" />
+        </IconButton>
+        <ProfileMenuButton {...profileMenu} />
+      </div>
+    </header>
+  );
+}
+
+// ─── 컴포저 칩 툴바 (홈·워크스페이스 공용) ─────────────────────────────────────
+// 데스크톱과 동일하게 "양식 업로드"를 포함하고, 토글 칩에는 설명 툴팁을 붙인다.
+// 자리가 모자라면 줄바꿈으로 내리지 않고 가로 슬라이드로 가려뒀다가 밀어서 볼 수 있게 한다.
+const CHIP_TOOLTIP = {
+  upload: "올린 양식과 똑같은 형식으로 문서를 만들어줍니다.",
+  auto: "질문에 맞게 프롬프트를 자동으로 최적화하여 더 정확한 답변을 생성합니다.",
+  doc: "참고문서 원문 전체를 AI 입력에 포함합니다. 입력 크기가 증가하여 처리 비용과 응답 시간이 증가할 수 있습니다.",
+} as const;
+
+function ComposerChips({ showUpload = true }: { showUpload?: boolean }) {
+  const [autoOn, setAutoOn] = useState(true);
+  const [docOn, setDocOn] = useState(false);
+  const [tip, setTip] = useState<{ text: string; left: number; width: number; arrowX: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const scRef = useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = useState({ left: false, right: false });
+  const tipTimer = useRef<number | undefined>(undefined);
+
+  // 좌우 끝에 가려진 칩이 있는지 — 페이드로 "더 있다"는 걸 알린다
+  const updateEdges = useCallback(() => {
+    const el = scRef.current;
+    if (!el) return;
+    setEdge({
+      left: el.scrollLeft > 2,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    updateEdges();
+    const el = scRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(updateEdges);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [updateEdges]);
+
+  useEffect(() => () => window.clearTimeout(tipTimer.current), []);
+
+  // 데스크톱은 hover로, 터치 기기(hover 없음)는 탭으로 툴팁을 띄운다.
+  const showTip = (el: HTMLElement, text: string, autoHide: boolean) => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const r = el.getBoundingClientRect();
+    const w = wrap.getBoundingClientRect();
+    // 말풍선은 컨테이너 안에 가두고, 화살표만 칩 중앙을 가리키게 한다
+    const width = Math.min(280, w.width);
+    const center = r.left + r.width / 2 - w.left;
+    const left = Math.min(Math.max(center, width / 2), w.width - width / 2);
+    const arrowX = Math.min(Math.max(center, left - width / 2 + 12), left + width / 2 - 12);
+    setTip({ text, left, width, arrowX });
+    window.clearTimeout(tipTimer.current);
+    if (autoHide) tipTimer.current = window.setTimeout(() => setTip(null), 2800);
+  };
+
+  // 칩 하나에 붙일 툴팁 핸들러 묶음 — 포인터 종류로 그때그때 판단한다.
+  // 마우스는 hover로, 터치·펜은 탭으로 (자동 숨김) 띄운다.
+  const lastPointer = useRef<string>("mouse");
+  const tipHandlers = (text: string) => ({
+    onPointerEnter: (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType === "mouse") showTip(e.currentTarget, text, false);
+    },
+    onPointerLeave: (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType === "mouse") setTip(null);
+    },
+    onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+      lastPointer.current = e.pointerType || "mouse";
+    },
+    onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (lastPointer.current !== "mouse") showTip(e.currentTarget, text, true);
+    },
+  });
+
+  const chipStyle = (on: boolean) => ({
+    background: on ? "#eff6ff" : "white",
+    border: `1px solid ${on ? "rgba(79,123,255,0.35)" : "#e2e8f0"}`,
+  });
+  const chipText = (on: boolean) => ({ ...f, fontWeight: 600, fontSize: 11, color: on ? "#4f7bff" : "#62748e" });
+
+  return (
+    <div ref={wrapRef} className="relative flex-1 min-w-0">
+      {/* 툴팁 — 스크롤 컨테이너 밖에 그려야 잘리지 않는다 */}
+      {tip && (
+        <>
+          <div
+            className="absolute z-20 rounded-[12px] px-4 py-2.5 pointer-events-none"
+            style={{
+              bottom: "calc(100% + 9px)",
+              left: tip.left,
+              transform: "translateX(-50%)",
+              width: tip.width,
+              // 아이콘 툴팁과 같은 면·테두리·그림자를 쓴다(theme.css --tooltip-*).
+              background: "var(--tooltip)",
+              border: "1px solid var(--tooltip-border)",
+              boxShadow: "var(--tooltip-shadow)",
+            }}
+          >
+            <p style={{ ...f, fontWeight: 700, fontSize: 12, color: "white", lineHeight: 1.6, letterSpacing: "-0.2px", textAlign: "center" }}>
+              {tip.text}
+            </p>
+          </div>
+          <div
+            className="absolute z-20 pointer-events-none"
+            style={{
+              bottom: "calc(100% + 3px)",
+              left: tip.arrowX,
+              transform: "translateX(-50%)",
+              width: 0,
+              height: 0,
+              borderLeft: "7px solid transparent",
+              borderRight: "7px solid transparent",
+              borderTop: "7px solid var(--tooltip)",
+            }}
+          />
+        </>
+      )}
+
+      {/* 가로 슬라이드 영역 */}
+      <div
+        ref={scRef}
+        onScroll={() => { updateEdges(); setTip(null); }}
+        className="composer-chips-scroll flex items-center gap-1.5 overflow-x-auto"
+        style={{ scrollbarWidth: "none", flexWrap: "nowrap", WebkitOverflowScrolling: "touch" }}
+      >
+        <button data-tutorial="attach" className="bg-white border border-[#e2e8f0] rounded-full size-[32px] flex items-center justify-center shrink-0" aria-label="파일 첨부"><IconAttach /></button>
+        <button data-tutorial="skill" className="bg-[#eff6ff] border border-[rgba(79,123,255,0.25)] rounded-full size-[32px] flex items-center justify-center shrink-0" aria-label="스킬"><IconSparkle /></button>
+
+        {/* 양식 업로드 — 홈 컴포저에만. 워크스페이스에서는 숨긴다(구분선도 함께). */}
+        {showUpload && (
+          <>
+            <span className="shrink-0 w-px h-5 bg-[#e2e8f0]" />
+            <button
+              data-tutorial="upload"
+              {...tipHandlers(CHIP_TOOLTIP.upload)}
+              className="rounded-full h-[32px] flex items-center gap-1 px-2.5 shrink-0"
+              style={chipStyle(false)}
+            >
+              <Upload size={13} strokeWidth={1.9} color="#62748e" />
+              <span style={{ ...chipText(false), whiteSpace: "nowrap" }}>내 양식 올리기</span>
+            </button>
+            <span className="shrink-0 w-px h-5 bg-[#e2e8f0]" />
+          </>
+        )}
+
+        {/* 자동 프롬프트 — 토글 + 툴팁 */}
+        <button
+          data-tutorial="auto-prompt"
+          {...tipHandlers(CHIP_TOOLTIP.auto)}
+          onClick={(e) => { setAutoOn((v) => !v); if (lastPointer.current !== "mouse") showTip(e.currentTarget, CHIP_TOOLTIP.auto, true); }}
+          aria-pressed={autoOn}
+          className="rounded-full h-[32px] flex items-center gap-1 px-2.5 shrink-0"
+          style={chipStyle(autoOn)}
+        >
+          {autoOn ? <Check size={13} strokeWidth={2.6} color="#4f7bff" /> : <IconAutoPrompt />}
+          <span style={{ ...chipText(autoOn), whiteSpace: "nowrap" }}>프롬프트 다듬기</span>
+        </button>
+
+        {/* 원문 사용 — 토글 + 툴팁 */}
+        <button
+          data-tutorial="doc-source"
+          {...tipHandlers(CHIP_TOOLTIP.doc)}
+          onClick={(e) => { setDocOn((v) => !v); if (lastPointer.current !== "mouse") showTip(e.currentTarget, CHIP_TOOLTIP.doc, true); }}
+          aria-pressed={docOn}
+          className="rounded-full h-[32px] flex items-center gap-1 px-2.5 shrink-0"
+          style={chipStyle(docOn)}
+        >
+          {docOn ? <Check size={13} strokeWidth={2.6} color="#4f7bff" /> : <IconDocRef />}
+          <span style={{ ...chipText(docOn), whiteSpace: "nowrap" }}>원문 그대로 쓰기</span>
+        </button>
+      </div>
+
+      {/* 가려진 칩이 있음을 알리는 페이드 */}
+      {edge.left && (
+        <div className="absolute inset-y-0 left-0 w-6 pointer-events-none"
+          style={{ background: "linear-gradient(to right, white, rgba(255,255,255,0))" }} />
+      )}
+      {edge.right && (
+        <div className="absolute inset-y-0 right-0 w-6 pointer-events-none"
+          style={{ background: "linear-gradient(to left, white, rgba(255,255,255,0))" }} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * 컴포저 본문 영역 높이 — 접힘 / 펼침.
+ *
+ * 카드 전체 높이는 여기에 칩 줄과 테두리가 더해진 값이다(접힘 144 / 펼침 680).
+ * 카드가 아니라 본문 영역의 높이를 바꾼다. 양쪽 다 확정값이라야 height 전이가 걸리고,
+ * 카드에 auto → 고정px 를 주면 애니메이션이 붙지 않는다.
+ */
+const COMPOSER_H = { collapsed: 80, expanded: 616 } as const;
+/** 확대/축소 전이 시간. 홈과 워크스페이스가 같은 값을 쓴다. */
+const COMPOSER_ANIM = "height 200ms ease";
+
+/**
+ * 컴포저 카드 껍데기 — 배경·테두리·그림자. 안쪽 여백은 화면마다 달라 각자 둔다.
+ *
+ * - focus(기본): 파란 테두리로 강조하는 원래 모습. 메인과 각 서비스 화면이 쓴다.
+ *   바깥 흰 카드 + 파란 2px 테두리, 안쪽에 80% 흰색 층을 한 겹 더 얹는 두 겹 구성이다.
+ * - plain: 워크스페이스 전용. 이미 작업 중인 화면이라 입력창을 파랗게 강조하지 않고
+ *   옅은 회색 테두리만 둔다. 파란 테두리가 없으면 흰 배경 위의 80% 흰색 층이
+ *   아무 차이도 만들지 않으므로 한 겹으로 둔다.
+ */
+function ComposerCard({ variant = "focus", children }: { variant?: "focus" | "plain"; children: ReactNode }) {
+  if (variant === "plain") {
+    return (
+      // border를 className으로 둬야 아래 :focus-within 규칙(theme.css)이 인라인 style보다
+      // 우선순위에서 밀리지 않는다 — 안의 textarea에 포커스가 가면 카드 테두리 전체가
+      // 살짝 강조되어, 지금까지 전혀 없던 "여기 입력 중" 표시가 생긴다.
+      <div className="composer-card-plain bg-white rounded-[20px] border border-[#e8ecf2] shadow-[0px_2px_20px_rgba(0,0,0,0.09)]">
+        {children}
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-[20px] border-2 border-[#4f7bff]" style={{ boxShadow: "0px 8px 32px 0px rgba(79,123,255,0.1)" }}>
+      <div className="bg-[rgba(255,255,255,0.8)] rounded-[17px] border border-[rgba(223,230,237,0.5)] m-0.5" style={{ boxShadow: "0px 1px 2px 0px rgba(0,0,0,0.05)" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** 컴포저 우상단 확대/축소 토글. 두 컴포저가 같은 버튼을 쓴다. */
+function ComposerExpandToggle({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+  return (
+    <IconButton
+      onClick={onToggle}
+      aria-label={expanded ? "입력창 축소" : "입력창 확대"}
+      aria-expanded={expanded}
+      className="absolute top-2.5 right-2.5 size-8 flex items-center justify-center shrink-0"
+      style={{ color: "#475569", opacity: 0.45 }}
+    >
+      {expanded ? <Minimize2 size={16} strokeWidth={1.8} /> : <Maximize2 size={16} strokeWidth={1.8} />}
+    </IconButton>
+  );
+}
+
+/** 컴포저 전송 버튼 — 두 컴포저(홈/워크스페이스)가 같은 버튼을 쓴다. 배경이 항상
+ *  브랜드 블루라 Tailwind hover: 클래스가 안 먹는(인라인 style 우선) 문제를 Button.tsx와
+ *  같은 방식(React 상태로 배경 계산)으로 피한다. */
+function ComposerSendButton({ onClick }: { onClick?: () => void }) {
   const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  // Button.tsx와 같은 언어를 쓴다 — pressed는 hover보다 한 단계 더 어둡게(scale/이동 없음).
+  const bg = pressed ? "#2f56c9" : hovered ? color.brandHover : "#4f7bff";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="생성 요청 보내기"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      className="rounded-full size-[32px] flex items-center justify-center shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#4f7bff]"
+      style={{ background: bg, transition: `background-color ${motion.fast}` }}
+    >
+      <IconSend />
+    </button>
+  );
+}
+
+/** 컴포저 본문 영역 최소 높이 — 빈 상태의 현재 높이를 그대로 유지한다. */
+const COMPOSER_MIN_BODY = 80;
+/** 확대 버튼을 눌렀을 때의 본문 높이. 카드 전체로는 680px 이 된다. */
+const COMPOSER_EXPANDED_BODY = 616;
+
+function ChatInputBox({ initialValue }: { initialValue?: string } = {}) {
+  const [value, setValue] = useState(initialValue ?? "");
+  // 우상단 확대/축소. 자동 높이와 별개로, 눌러서 한 번에 크게 펼쳐 쓰는 용도다.
+  const [expanded, setExpanded] = useState(false);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  // 내부 스크롤이 생겼고 아직 맨 아래가 아닐 때만 하단 페이드를 띄운다.
+  const [fade, setFade] = useState(false);
+  // 접힌 상태에서 상한을 넘겼는지. 여기 걸려야 확대 버튼이 의미가 있다.
+  const [overflowing, setOverflowing] = useState(false);
+
+  const syncFade = useCallback(() => {
+    const el = taRef.current;
+    if (!el) return;
+    const canScroll = el.scrollHeight > el.clientHeight + 1;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+    setFade(canScroll && !atBottom);
+  }, []);
+
+  /**
+   * 높이를 내용에 맞춘다. auto 로 한 번 접었다 scrollHeight 로 다시 펴야
+   * 글자를 지웠을 때도 정확히 줄어든다. max-height(CSS 변수)에 걸리면 내부 스크롤로 넘긴다.
+   * 전이(transition)는 주지 않는다 — 타이핑 중 높이가 출렁여 보인다.
+   */
+  const resize = useCallback(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+    const over = el.scrollHeight > el.clientHeight + 1;
+    el.style.overflowY = over ? "auto" : "hidden";
+    // 확대 가능 여부는 "접힌 상태에서 넘쳤는가"로만 판단한다.
+    // 펼친 상태의 상한(592)으로 재면 거의 항상 false 가 되어 버튼이 사라진다.
+    if (!expanded) setOverflowing(over);
+    syncFade();
+  }, [syncFade, expanded]);
+
+  // 초기 렌더와 값이 바뀔 때(외부 주입 포함) 모두 다시 계산한다.
+  // 확대/축소로 상한이 바뀔 때도 같이 다시 잰다.
+  useLayoutEffect(() => { resize(); }, [value, expanded, resize]);
+
+  // 폭이 바뀌면 줄바꿈 위치가 달라지고, 브레이크포인트가 넘어가면 max-height 도 바뀐다.
+  useEffect(() => {
+    const on = () => resize();
+    window.addEventListener("resize", on);
+    window.addEventListener("orientationchange", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("orientationchange", on);
+    };
+  }, [resize]);
+
+  /** 모바일·태블릿에서 키보드가 올라오면 입력창이 가리지 않도록 화면 안으로 끌어온다. */
+  const keepVisible = useCallback(() => {
+    taRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const on = () => {
+      if (document.activeElement === taRef.current) keepVisible();
+    };
+    vv.addEventListener("resize", on);
+    return () => vv.removeEventListener("resize", on);
+  }, [keepVisible]);
+
+  return (
+    <div className="w-full" data-tutorial="composer">
+      <ComposerCard>
+          {/* 본문 — 빈 상태 높이는 지금과 같고, 3줄째부터 내용만큼 커진다.
+              확대 상태에서는 바닥 높이만 크게 잡고, 그 안에서 자동 높이가 그대로 동작한다.
+              전이는 min-height 에만 건다. 타이핑으로 바뀌는 건 textarea 높이라 흔들리지 않는다. */}
+          <div
+            className="relative px-5 pt-4 pb-2"
+            style={{
+              minHeight: expanded ? COMPOSER_EXPANDED_BODY : COMPOSER_MIN_BODY,
+              transition: "min-height 200ms ease",
+            }}
+          >
+            <textarea
+              ref={taRef}
+              rows={1}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onScroll={syncFade}
+              onFocus={keepVisible}
+              placeholder={COMPOSER_PLACEHOLDER}
+              className="composer-textarea w-full block resize-none bg-transparent outline-none border-0 p-0"
+              style={{
+                ...f,
+                fontWeight: 400,
+                fontSize: "var(--composer-ph-size)",
+                color: "#0a0a0a",
+                lineHeight: 1.6,
+                minHeight: 24,
+                // 확대 상태에서는 상한을 본문 높이까지 올려, 펼친 만큼 그대로 쓸 수 있게 한다.
+                maxHeight: expanded ? COMPOSER_EXPANDED_BODY - 24 : "var(--composer-max-h)",
+                paddingRight: 34,
+                overflowY: "hidden",
+              }}
+            />
+            {/* 빈 상태나 짧은 입력에서는 펼쳐도 보여줄 게 없다. 자동 높이가 이미 전부 보여주는 구간에서는
+                버튼 자체를 내보내지 않는다. 펼친 뒤에는 되돌릴 수 있어야 하므로 계속 남긴다. */}
+            {(expanded || overflowing) && (
+              <ComposerExpandToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
+            )}
+            {/* 최대 높이에 걸려 아래에 더 있을 때만 뜨는 페이드 */}
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: 20,
+                right: 20,
+                bottom: 8,
+                height: 16,
+                pointerEvents: "none",
+                opacity: fade ? 1 : 0,
+                background: "linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95))",
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-1.5 px-3.5 pb-3.5 pt-2">
+            <ComposerChips />
+            <ComposerSendButton />
+          </div>
+      </ComposerCard>
+      <style>{`
+        .composer-textarea::placeholder { color: #a7b3c7; }
+        /* 스크롤바는 숨기고 스크롤은 살린다 */
+        .composer-textarea { scrollbar-width: none; }
+        .composer-textarea::-webkit-scrollbar { display: none; }
+      `}</style>
+    </div>
+  );
+}
+
+function TemplateCard({ title, isVideo = false, ratio = "66%", onApply, favorited = false }: { title: string; isVideo?: boolean; ratio?: string; onApply?: () => void; favorited?: boolean }) {
+  // 즐겨찾기 화면의 카드는 처음부터 즐겨찾기 상태(노란 별)로 표시된다.
+  const [isFav, setIsFav] = useState(favorited);
+  const [hovered, setHovered] = useState(false);
+  // 마지막으로 카드를 건드린 포인터 종류. 모듈 로드 시점의 hover 판정(HAS_HOVER)에 의존하면
+  // 기기 에뮬레이션을 켜고 끄거나 마우스·터치를 섞어 쓸 때 값이 어긋나므로 이벤트마다 판단한다.
+  const lastPointer = useRef<string>("mouse");
 
   return (
     <div
       className="group flex flex-col rounded-[14px] overflow-hidden bg-white border border-[#e2e8f0] cursor-pointer"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      // 데스크톱은 hover로 오버레이를 노출한다. 터치 기기는 hover가 없으므로 카드를 탭하면 오버레이(적용 버튼·별)를 노출한다.
-      onClick={() => { if (!HAS_HOVER) setHovered((v) => !v); }}
+      // 마우스: 올리면 바로 노출, 벗어나면 숨김
+      onPointerEnter={(e) => { if (e.pointerType === "mouse") setHovered(true); }}
+      onPointerLeave={(e) => { if (e.pointerType === "mouse") setHovered(false); }}
+      onPointerDown={(e) => { lastPointer.current = e.pointerType || "mouse"; }}
+      // 터치·펜: hover가 없으므로 탭하면 오버레이(적용 버튼·별)를 토글한다
+      onClick={() => { if (lastPointer.current !== "mouse") setHovered((v) => !v); }}
       style={{
         boxShadow: hovered
           ? "0px 8px 24px rgba(0,0,0,0.13)"
@@ -774,7 +1934,77 @@ function TemplateCard({ title, isVideo = false, ratio = "66%", onApply }: { titl
   );
 }
 
-function SearchFilterBar({ placeholder = "검색어를 입력해 주세요" }: { placeholder?: string }) {
+/** 내 작업·즐겨찾기 필터 항목. 순서가 곧 메뉴 순서다. */
+const FILTER_OPTIONS = ["전체", "이미지", "랜딩페이지", "동영상", "프레젠테이션", "오디오", "문서"] as const;
+type FilterOption = typeof FILTER_OPTIONS[number];
+
+/** 앱 전반의 브랜드 블루 — 선택 항목과 열림 상태 테두리에 쓴다(theme.css 의 --brand 와 같은 값). */
+const ACCENT = "#4f7bff";
+
+/**
+ * 검색창 + 필터 버튼 (내 작업 · 즐겨찾기 공용).
+ *
+ * 필터는 전 뷰포트가 같은 앵커 드롭다운이다 — 좁은 화면이라고 바텀시트로 바뀌지 않고,
+ * 항목 문구도 선택 표시(액센트 글자색 + 우측 체크)도 폭에 따라 달라지지 않는다.
+ * 폭으로 갈리는 것은 항목 높이 하나뿐이고, 그마저 브레이크포인트가 아니라
+ * 입력 방식(pointer: coarse — 손가락 48px / 마우스 44px)으로 나눈다. → theme.css 의 .filter-menu
+ */
+function SearchFilterBar({ placeholder = "검색어를 입력해 주세요", value, onChange }: {
+  placeholder?: string;
+  /** 선택된 필터. 넘기지 않으면 컴포넌트가 직접 들고 있는다. */
+  value?: FilterOption;
+  onChange?: (v: FilterOption) => void;
+}) {
+  const [own, setOwn] = useState<FilterOption>("전체");
+  const selected = value ?? own;
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const close = useCallback((returnFocus: boolean) => {
+    setOpen(false);
+    if (returnFocus) triggerRef.current?.focus();
+  }, []);
+
+  // 열리면 첫 항목으로 포커스를 옮긴다 — 방향키 이동의 시작점.
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitemradio"]')?.focus();
+  }, [open]);
+
+  // Esc로 닫고 포커스는 트리거로 돌려보낸다.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(true); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
+
+  /** 방향키(↑↓·Home·End) 이동. Tab 으로 벗어나면 닫는다. */
+  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Tab") { setOpen(false); return; }
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [],
+    );
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const to =
+      e.key === "ArrowDown" ? (at + 1) % items.length
+        : e.key === "ArrowUp" ? (at - 1 + items.length) % items.length
+          : e.key === "Home" ? 0
+            : e.key === "End" ? items.length - 1
+              : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    items[to].focus();
+  };
+
+  const pick = (opt: FilterOption) => {
+    if (value === undefined) setOwn(opt);
+    onChange?.(opt);
+    close(true);
+  };
+
   return (
     <div className="flex items-center gap-2 px-4 pb-3">
       <div className="flex-1 relative">
@@ -785,18 +2015,63 @@ function SearchFilterBar({ placeholder = "검색어를 입력해 주세요" }: {
           style={{ ...f, fontWeight: 400, fontSize: 13, color: "#0a0a0a" }}
         />
       </div>
-      <button className="h-10 bg-white border border-[#e2e8f0] rounded-[14px] flex items-center gap-1.5 px-3 shrink-0">
-        <IconFilter />
-        <span style={{ ...f, fontWeight: 600, fontSize: 13, color: "#334155" }}>필터</span>
-      </button>
+      {/* 메뉴가 이 래퍼 기준으로 버튼 바로 아래에 붙는다 */}
+      <div className="relative shrink-0">
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="h-10 bg-white rounded-[14px] flex items-center gap-1.5 px-3"
+          style={{ border: `1px solid ${open ? ACCENT : "#e2e8f0"}`, transition: "border-color 120ms ease" }}
+        >
+          <IconFilter color={open ? ACCENT : "#334155"} />
+          <span style={{ ...f, fontWeight: 600, fontSize: 13, color: open ? ACCENT : "#334155" }}>필터</span>
+        </button>
+
+        {open && (
+          <>
+            <div className="fixed inset-0 z-50" onClick={() => close(false)} />
+            <div ref={menuRef} role="menu" aria-label="필터" onKeyDown={onMenuKeyDown} className="filter-menu">
+              {FILTER_OPTIONS.map((opt) => {
+                const active = opt === selected;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={active}
+                    onClick={() => pick(opt)}
+                    className="filter-menu-item"
+                  >
+                    <span
+                      className="filter-menu-label"
+                      style={{ ...f, fontWeight: active ? 700 : 500, color: active ? ACCENT : "#1e293b" }}
+                    >
+                      {opt}
+                    </span>
+                    {active && (
+                      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
+                        <path d="M5 12l5 5L19 7" stroke={ACCENT} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function FormsCard({ title, category, count, date }: { title: string; category: string; count: number; date: string }) {
+function FormsCard({ title, category, count, date, onClick }: { title: string; category: string; count: number; date: string; onClick?: () => void }) {
   return (
-    <div className="bg-white rounded-[18px] px-4 pt-4 pb-[18px] border border-[#ebebf0]"
-      style={{ boxShadow: "0px 1px 4px rgba(0,0,0,0.05)" }}>
+    <button type="button" onClick={onClick}
+      className="w-full text-left bg-white rounded-[18px] px-4 pt-4 pb-[18px] border border-[#ebebf0]"
+      style={{ boxShadow: "0px 1px 4px rgba(0,0,0,0.05)", cursor: onClick ? "pointer" : "default" }}>
       {/* 상단: 아이콘 + 빈칸 배지 */}
       <div className="flex items-start justify-between mb-3">
         <div className="size-[52px] rounded-[14px] bg-[#fff7ed] flex items-center justify-center">
@@ -822,16 +2097,30 @@ function FormsCard({ title, category, count, date }: { title: string; category: 
       </div>
       {/* 날짜 */}
       <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#b0bec5" }}>{date}</p>
-    </div>
+    </button>
   );
 }
 
-function FormsAIScreen() {
-  const [activeTab, setActiveTab] = useState(0);
-  const [sortOption, setSortOption] = useState<SortOption>("인기순");
+/**
+ * 서식 목록.
+ *
+ * 필터칩·정렬·스크롤 위치는 App 이 들고 있다. 서식 채우기 화면으로 넘어가면
+ * 이 컴포넌트는 언마운트되므로, 내부 state 로 두면 목록 복귀 시 전부 초기화된다.
+ */
+function FormsAIScreen({ activeTab, onTabChange, sortOption, onSortChange, scrollTopRef, onOpenForm }: {
+  activeTab: number;
+  onTabChange: (i: number) => void;
+  sortOption: SortOption;
+  onSortChange: (s: SortOption) => void;
+  /** 스크롤 위치 보관함. 언마운트되어도 App 의 ref 에 남는다. */
+  scrollTopRef: { current: number };
+  onOpenForm: (formId: string, title: string) => void;
+}) {
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [stuck, setStuck] = useState(false);
   const sentinelRef = React.useRef<HTMLDivElement>(null);
+  const mainRef = React.useRef<HTMLElement>(null);
+  const sortTriggerRef = React.useRef<HTMLButtonElement>(null);
   const sortActive = sortOption !== "인기순";
   const filterTabs = ["전체", "외국인 비자 서식", "법무 서식", "관공서 양식"];
 
@@ -843,16 +2132,23 @@ function FormsAIScreen() {
     return () => obs.disconnect();
   }, []);
 
+  // 페인트 전에 복원해야 목록이 맨 위에서 튀지 않는다.
+  useLayoutEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = scrollTopRef.current;
+  }, [scrollTopRef]);
+
   return (
     <>
-    <main className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-      <div style={{ paddingTop: "var(--gap-hero-top)", paddingLeft: "var(--gap-screen-x)", paddingRight: "var(--gap-screen-x)" }}>
-        <p className="text-center leading-[1.3]" style={{ ...f, fontWeight: 700, fontSize: 22, letterSpacing: "-1.1px", wordBreak: "keep-all", marginBottom: "var(--gap-title-sub)" }}>
+    <main ref={mainRef} onScroll={(e) => { scrollTopRef.current = e.currentTarget.scrollTop; }}
+      className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+      {/* 히어로(헤드라인·부제·입력창) — 태블릿에서만 --svc-hero-max(720px) 축을 따른다 */}
+      <div className="w-full mx-auto" style={{ maxWidth: "var(--svc-hero-max)", paddingTop: "var(--gap-hero-top)", paddingLeft: "var(--gap-screen-x)", paddingRight: "var(--gap-screen-x)" }}>
+        <p className="text-center leading-[1.3]" style={{ ...f, fontWeight: 700, fontSize: "var(--svc-title-size)", letterSpacing: "var(--svc-title-tracking)", wordBreak: "keep-all", marginBottom: "var(--gap-title-sub)" }}>
           <span style={{ color: "#4f7bff" }}>서식</span>
           <span style={{ color: "#0a0a0a" }}>, 한 줄이면 충분해요</span>
         </p>
-        <p className="text-center" style={{ ...f, fontWeight: 500, fontSize: 12.5, color: "#737373", letterSpacing: "-0.3px", lineHeight: 1.6, wordBreak: "keep-all", marginBottom: "var(--gap-sub-composer)" }}>
-          원하는 서식을 고르거나 직접 설명해 바로 만들어 보세요.
+        <p className="text-center" style={{ ...f, fontWeight: 500, fontSize: "var(--svc-sub-size)", color: SUBTITLE_COLOR, letterSpacing: "-0.3px", lineHeight: 1.6, wordBreak: "keep-all", marginBottom: "var(--gap-sub-composer)" }}>
+          {SERVICE_COPY.forms}
         </p>
         <ChatInputBox />
       </div>
@@ -864,7 +2160,7 @@ function FormsAIScreen() {
         <div className="flex-1 overflow-x-auto flex items-center" style={{ scrollbarWidth: "none", height: "100%" }}>
           <div className="flex items-center shrink-0" style={{ gap: 8, paddingLeft: "var(--gap-screen-x)", paddingRight: 4 }}>
             {filterTabs.map((tab, i) => (
-              <button key={tab} onClick={() => setActiveTab(i)} className="shrink-0 h-9 rounded-full px-4 flex items-center"
+              <button key={tab} onClick={() => onTabChange(i)} className="shrink-0 h-9 rounded-full px-4 flex items-center"
                 style={{ background: i === activeTab ? "#0a0a0a" : "white", border: i === activeTab ? "none" : "1px solid #e2e8f0" }}>
                 <span style={{ ...f, fontWeight: 600, fontSize: 13, color: i === activeTab ? "white" : "#334155", whiteSpace: "nowrap" }}>{tab}</span>
               </button>
@@ -876,10 +2172,24 @@ function FormsAIScreen() {
           <button className="flex items-center justify-center" style={{ width: 36, height: 36 }}>
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="#334155" strokeWidth="1.8" /><path d="M20 20L16.5 16.5" stroke="#334155" strokeWidth="1.8" strokeLinecap="round" /></svg>
           </button>
-          <button className="flex items-center justify-center relative" style={{ width: 36, height: 36 }} onClick={() => setSortSheetOpen(true)}>
-            <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" stroke="#334155" strokeWidth="1.8" strokeLinecap="round" /></svg>
-            {sortActive && <span style={{ position: "absolute", top: 5, right: 5, width: 6, height: 6, borderRadius: "50%", background: "#4f7bff" }} />}
-          </button>
+          {/* 정렬 — 팝오버가 이 래퍼 기준으로 아래에 붙는다(모바일은 바텀시트라 무관) */}
+          <div style={{ position: "relative" }}>
+            <button
+              ref={sortTriggerRef}
+              aria-label="정렬"
+              aria-haspopup="menu"
+              aria-expanded={sortSheetOpen}
+              className="flex items-center justify-center relative rounded-[10px]"
+              style={{ width: 36, height: 36, background: sortSheetOpen ? "#e8edf3" : "transparent", transition: "background-color 120ms ease" }}
+              onClick={() => setSortSheetOpen((v) => !v)}
+            >
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" stroke="#334155" strokeWidth="1.8" strokeLinecap="round" /></svg>
+              {sortActive && <span style={{ position: "absolute", top: 5, right: 5, width: 6, height: 6, borderRadius: "50%", background: "#4f7bff" }} />}
+            </button>
+            {sortSheetOpen && (
+              <SortMenu selected={sortOption} onSelect={onSortChange} onClose={() => setSortSheetOpen(false)} triggerRef={sortTriggerRef} />
+            )}
+          </div>
         </div>
       </div>
 
@@ -888,52 +2198,81 @@ function FormsAIScreen() {
         <span style={{ ...f, fontWeight: 500, fontSize: 12.5, color: "#90a1b9" }}>134개의 서식</span>
       </div>
 
-      {/* 서식 카드 목록 */}
-      <div className="flex flex-col" style={{ gap: 14, padding: `0 var(--gap-screen-x) var(--gap-grid-bottom)` }}>
-        {formsCards.map((card, i) => (
-          <FormsCard key={i} {...card} />
+      {/* 서식 카드 목록 — 모바일 1열, 768px 이상 2열 */}
+      <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 14, padding: `0 var(--gap-screen-x) var(--gap-grid-bottom)` }}>
+        {formsCards.map((card) => (
+          <FormsCard key={card.id} {...card} onClick={() => onOpenForm(card.id, card.title)} />
         ))}
       </div>
     </main>
 
-    {sortSheetOpen && (
-      <SortBottomSheet selected={sortOption} onSelect={setSortOption} onClose={() => setSortSheetOpen(false)} />
-    )}
     </>
   );
 }
 
 // ─── 화면 컴포넌트 ────────────────────────────────────────────────────────────
 
-function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+/** 홈 시안 비교 스위치(2026-11-20, 임시) — 오른쪽 아래. B안을 지우면 이것도 지운다 */
+function HomeVariantSwitch({ value, onChange }: { value: "a" | "b"; onChange: (v: "a" | "b") => void }) {
   return (
-    <main className="flex-1 flex flex-col px-4 pb-6 overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-      <div className="flex-[2_0_0] min-h-[24px] max-h-[72px]" />
-      {/* Heading */}
-      <div className="mb-10 text-center">
-        <p className="leading-[1.25] whitespace-nowrap" style={{ ...f, fontWeight: 700, fontSize: 26, letterSpacing: "-1.5px" }}>
-          <span style={{ color: "#4f7bff" }}>딸깍</span>
-          <span style={{ color: "#0a0a0a" }}> 한 번이면, 작업은 더 빠르게</span>
-        </p>
-        <p className="mt-2" style={{ ...f, fontWeight: 500, fontSize: 13, color: "#737373", letterSpacing: "-0.3px", lineHeight: 1.6 }}>
-          이미지, 문서, 발표자료, 검수까지 필요한 AI 작업을 한 곳에서.
-        </p>
+    <div className="fixed bottom-5 right-5 z-40 flex items-center gap-1 rounded-full bg-white p-1" style={{ ...f, boxShadow: "0px 8px 24px rgba(15,23,42,0.14)", border: `1px solid ${color.border.default}` }} role="radiogroup" aria-label="홈 시안">
+      <span className="pl-3 pr-1" style={{ fontSize: 13, fontWeight: 600, color: color.text.secondary }}>홈 시안</span>
+      {([["a", "지금 홈"], ["b", "B안"]] as const).map(([v, l]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)} className="h-8 px-3 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#4f7bff]" style={{ fontSize: 13, fontWeight: 600, background: value === v ? "#111827" : "transparent", color: value === v ? "#fff" : "#334155" }}>{l}</button>
+      ))}
+    </div>
+  );
+}
+
+function HomeScreen({ onSelectTask, onOpenCardNews, onOpenEditor, onSearch, onHelp, onViewAllTemplates, autoFocusHelper, onAutoFocusHelperHandled }: {
+  onSelectTask: (taskId: string) => void;
+  /** 작업별로 시작하기의 카드뉴스 카드 — 카드뉴스 브리프 편집 화면을 연다 */
+  onOpenCardNews: () => void;
+  /** "인기 템플릿으로 시작하기" 제목 줄의 "전체 보기" — 전체 템플릿 화면을 연다 */
+  onViewAllTemplates: () => void;
+  /** 상단 아이콘 줄 — 포맷 에디터를 빈 템플릿으로 바로 연다 */
+  onOpenEditor: (kind: EditorKind) => void;
+  onSearch: (query: string) => void;
+  onHelp: () => void;
+  /** "요청 작성 도움받기"를 취소하고 홈으로 돌아왔을 때만 true — 도우미 버튼에 포커스를 되돌린다. */
+  autoFocusHelper?: boolean;
+  onAutoFocusHelperHandled?: () => void;
+}) {
+  // 태블릿에서는 푸터가 화면 하단 고정이 아니라 콘텐츠 흐름 끝에 와야 하므로
+  // 셸(App)이 아니라 스크롤 컨테이너인 이 main 안에서 렌더한다.
+  const isTabletRange = useIsTabletRange();
+
+  return (
+    <main
+      className="flex-1 flex flex-col pb-6 overflow-y-auto"
+      style={{ scrollbarWidth: "none", paddingLeft: "var(--gap-screen-x)", paddingRight: "var(--gap-screen-x)" }}
+    >
+      {/* 비율 스페이서 — 모바일·데스크톱 배치용. 태블릿에서는 CSS 로 숨기고 중앙 정렬로 대체한다. */}
+      <div className="home-spacer flex-[2_0_0] min-h-[24px] max-h-[72px]" />
+      {/* .home-stack — 모바일·데스크톱에서는 display:contents 라 아래 두 블록이 main 의 flex 흐름에
+          그대로 참여한다(기존 배치 유지). 태블릿에서만 720px 축의 세로 중앙 정렬 컨테이너가 된다. */}
+      <div className="home-stack">
+        {/* Heading — 참고 디자인 문구 그대로("딸깍"만 브랜드 색). */}
+        <div className="home-heading text-center">
+          <p className="leading-[1.3]" style={{ ...f, fontWeight: 700, fontSize: "var(--hero-title-size)", letterSpacing: "var(--hero-title-tracking)", color: "#0a0a0a", wordBreak: "keep-all" }}>
+            <span style={{ color: color.brand }}>딸깍</span> 한 번이면, 작업은 더 빠르게
+          </p>
+        </div>
+        {/* 검색+도움받기+에디터 아이콘 줄 · 인기 템플릿으로 시작하기 · 작업별로 시작하기 — 전부 같은 폭
+            (--home-container)에 맞춘다. 섹션 사이 간격은 여기(부모 flex gap)가 아니라 각
+            섹션 자신의 margin-top으로 관리한다(RecommendedCarousel·TaskGrid 둘 다
+            --home-section-gap) — 위 섹션 padding-bottom과 중복 합산되지 않도록
+            한 곳(아래 섹션의 margin-top)에서만 정한다. */}
+        <div className="home-body w-full mx-auto flex flex-col" style={{ maxWidth: "var(--home-container)" }}>
+          <div className="flex flex-col items-center" style={{ gap: 24 }}>
+            <HomeSearch onSearch={onSearch} onHelp={onHelp} autoFocusHelper={autoFocusHelper} onAutoFocusHelperHandled={onAutoFocusHelperHandled} />
+            <EditorQuickLinks onOpenEditor={onOpenEditor} />
+          </div>
+          <RecommendedCarousel onSelectTemplate={onSelectTask} onViewAll={onViewAllTemplates} />
+          {/* "작업별로 시작하기"(TaskGrid)는 2026-11-19 요청으로 홈에서 뺐다. 컴포넌트 파일은 남겨 둠 */}
+        </div>
       </div>
-      <ChatInputBox />
-      <div className="flex-[1_0_0] min-h-[20px] max-h-[40px]" />
-      {/* Categories */}
-      <div className="grid grid-cols-4 gap-x-3 gap-y-5">
-        {homeCategories.map((cat) => (
-          <button key={cat.label} onClick={() => onNavigate(cat.screen)} className="flex flex-col items-center gap-2.5">
-            <div className="bg-[#f1f5f9] rounded-full size-[56px] flex items-center justify-center"
-              style={{ filter: "drop-shadow(0px 4px 6px rgba(0,0,0,0.04))" }}>
-              {cat.icon}
-            </div>
-            <span className="text-center w-full" style={{ ...f, fontWeight: 600, fontSize: 11.5, color: "#334155", letterSpacing: "-0.25px", lineHeight: 1.3 }}>{cat.label}</span>
-          </button>
-        ))}
-      </div>
-      <div className="flex-[1_0_0] min-h-[16px] max-h-[32px]" />
+      {isTabletRange && <Footer />}
     </main>
   );
 }
@@ -941,79 +2280,110 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 const SORT_OPTIONS = ["인기순", "최신순", "이름순"] as const;
 type SortOption = typeof SORT_OPTIONS[number];
 
-function SortBottomSheet({ selected, onSelect, onClose }: {
+/**
+ * 정렬 메뉴 — 인기순 / 최신순 / 이름순.
+ *
+ * 표현은 전 뷰포트가 같다: 체크 아이콘이 글자 왼쪽, 선택 항목도 같은 글자색
+ * (선택 표시는 체크 하나로 끝낸다), 섹션 레이블 없음, 항목 높이 48px.
+ * 담는 그릇만 폭에 따라 갈린다 — 600px 미만은 바텀시트(트리거가 화면 위쪽이라
+ * 한 손으로 닿지 않는다), 그 이상은 트리거에 앵커된 팝오버. 분기는 theme.css 의
+ * .sort-menu 미디어쿼리가 전부라 컴포넌트는 하나뿐이다.
+ *
+ * 트리거를 감싸는 요소가 position:relative 여야 팝오버가 그 아래에 붙는다.
+ */
+function SortMenu({ selected, onSelect, onClose, triggerRef }: {
   selected: SortOption;
   onSelect: (v: SortOption) => void;
   onClose: () => void;
+  /** 닫힐 때 포커스를 되돌릴 트리거 버튼 */
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
 }) {
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  const close = React.useCallback((returnFocus: boolean) => {
+    onClose();
+    if (returnFocus) triggerRef.current?.focus();
+  }, [onClose, triggerRef]);
+
+  // 열리면 첫 항목으로 포커스를 옮긴다 — 방향키 이동의 시작점.
+  React.useEffect(() => {
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitemradio"]')?.focus();
+  }, []);
+
+  // Esc로 닫고 포커스는 트리거로 돌려보낸다.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(true); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
+
+  /** 방향키(↑↓·Home·End) 이동. Tab 으로 벗어나면 닫는다. */
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Tab") { onClose(); return; }
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [],
+    );
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const to =
+      e.key === "ArrowDown" ? (at + 1) % items.length
+        : e.key === "ArrowUp" ? (at - 1 + items.length) % items.length
+          : e.key === "Home" ? 0
+            : e.key === "End" ? items.length - 1
+              : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    items[to].focus();
+  };
+
   return (
     <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, zIndex: 50,
-          background: "rgba(0,0,0,0.35)",
-          animation: "fadeIn 180ms ease",
-        }}
-      />
-      {/* Sheet */}
-      <div
-        style={{
-          position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 51,
-          background: "white",
-          borderRadius: "20px 20px 0 0",
-          paddingBottom: "env(safe-area-inset-bottom, 16px)",
-          boxShadow: "0px -4px 24px rgba(0,0,0,0.1)",
-          animation: "slideUp 220ms cubic-bezier(0.32,0.72,0,1)",
-        }}
-      >
-        {/* 드래그 핸들 */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: "#dfe6ed" }} />
-        </div>
-        {/* 정렬 라벨 */}
-        <div style={{ padding: "14px 20px 6px" }}>
-          <span style={{ ...f, fontWeight: 600, fontSize: 13, color: "#90a1b9", letterSpacing: "-0.3px" }}>정렬</span>
-        </div>
-        {/* 옵션 목록 */}
+      <div className="sort-menu-backdrop" onClick={() => close(false)} />
+      <div ref={menuRef} role="menu" aria-label="정렬" onKeyDown={onKeyDown} className="sort-menu">
+        {/* 바텀시트일 때만 보이는 손잡이 */}
+        <div className="sort-menu-handle" />
         {SORT_OPTIONS.map((opt) => {
           const active = opt === selected;
           return (
             <button
               key={opt}
-              onClick={() => { onSelect(opt); onClose(); }}
-              className="w-full flex items-center justify-between"
-              style={{ padding: "15px 20px" }}
+              type="button"
+              role="menuitemradio"
+              aria-checked={active}
+              onClick={() => { onSelect(opt); close(true); }}
+              className="sort-menu-item"
             >
-              <span style={{ ...f, fontWeight: active ? 600 : 500, fontSize: 16, color: active ? "#4f7bff" : "#1e293b", letterSpacing: "-0.4px" }}>
+              <span className="sort-menu-check">
+                {active && (
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12l5 5L19 7" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              <span className="sort-menu-label" style={{ ...f, fontWeight: active ? 600 : 500 }}>
                 {opt}
               </span>
-              {active && (
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-                  <path d="M5 12l5 5L19 7" stroke="#4f7bff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
             </button>
           );
         })}
-        <div style={{ height: 16 }} />
       </div>
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
-      `}</style>
     </>
   );
 }
 
-function AIAgentScreen({ title, category, filterTabs, cards, cardRatio = "66%", wsCategory, onWorkspace }: {
+function AIAgentScreen({ title, category, desc, filterTabs, cards, cardRatio = "66%", wsCategory, onWorkspace, initialComposerValue }: {
   title: string; category: string;
+  /** 헤드라인 아래 부제. 문구는 SERVICE_COPY 에서 가져온다. */
+  desc: string;
   filterTabs: string[];
   cards: { title: string }[];
   cardRatio?: string;
   wsCategory?: WorkspaceCategory;
-  onWorkspace?: (templateName: string) => void;
+  /** 템플릿 적용 — 템플릿명과 함께 진입 시점의 필터 탭 라벨(워드·한글·엑셀·논문·영상…)을 넘긴다.
+      이 값이 결과물의 확장자와 뷰어 상단바 구성을 결정한다. */
+  onWorkspace?: (templateName: string, tabLabel: string) => void;
+  /** 요청 작성 도움받기가 완성한 요청문 — 진입 시 컴포저에 미리 채워 둔다. */
+  initialComposerValue?: string;
 }) {
   const [activeTab, setActiveTab] = useState(0);
   const [sortOption, setSortOption] = useState<SortOption>("인기순");
@@ -1022,6 +2392,7 @@ function AIAgentScreen({ title, category, filterTabs, cards, cardRatio = "66%", 
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const sentinelRef = React.useRef<HTMLDivElement>(null);
+  const sortTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   const sortActive = sortOption !== "인기순";
   const q = query.trim();
@@ -1042,15 +2413,16 @@ function AIAgentScreen({ title, category, filterTabs, cards, cardRatio = "66%", 
     <>
     <main className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarWidth: "none" }}>
       {/* Hero */}
-      <div style={{ paddingTop: "var(--gap-hero-top)", paddingLeft: "var(--gap-screen-x)", paddingRight: "var(--gap-screen-x)" }}>
-        <p className="text-center leading-[1.3]" style={{ ...f, fontWeight: 700, fontSize: 22, letterSpacing: "-1.1px", wordBreak: "keep-all", marginBottom: "var(--gap-title-sub)" }}>
+      {/* 히어로(헤드라인·부제·입력창) — 태블릿에서만 --svc-hero-max(720px) 축을 따른다 */}
+      <div className="w-full mx-auto" style={{ maxWidth: "var(--svc-hero-max)", paddingTop: "var(--gap-hero-top)", paddingLeft: "var(--gap-screen-x)", paddingRight: "var(--gap-screen-x)" }}>
+        <p className="text-center leading-[1.3]" style={{ ...f, fontWeight: 700, fontSize: "var(--svc-title-size)", letterSpacing: "var(--svc-title-tracking)", wordBreak: "keep-all", marginBottom: "var(--gap-title-sub)" }}>
           <span style={{ color: "#4f7bff" }}>{category}</span>
           <span style={{ color: "#0a0a0a" }}>{title}</span>
         </p>
-        <p className="text-center" style={{ ...f, fontWeight: 500, fontSize: 12.5, color: "#737373", letterSpacing: "-0.3px", lineHeight: 1.6, wordBreak: "keep-all", marginBottom: "var(--gap-sub-composer)" }}>
-          원하는 템플릿을 고르거나 직접 설명해 바로 만들어 보세요.
+        <p className="text-center" style={{ ...f, fontWeight: 500, fontSize: "var(--svc-sub-size)", color: SUBTITLE_COLOR, letterSpacing: "-0.3px", lineHeight: 1.6, wordBreak: "keep-all", marginBottom: "var(--gap-sub-composer)" }}>
+          {desc}
         </p>
-        <ChatInputBox />
+        <ChatInputBox initialValue={initialComposerValue} />
       </div>
 
       {/* sticky sentinel — sits just above the filter bar */}
@@ -1133,20 +2505,31 @@ function AIAgentScreen({ title, category, filterTabs, cards, cardRatio = "66%", 
                   <path d="M20 20L16.5 16.5" stroke="#334155" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
               </button>
-              {/* 정렬 아이콘 (배지 포함) */}
-              <button className="flex items-center justify-center relative" style={{ width: 36, height: 36 }}
-                onClick={() => setSortSheetOpen(true)}>
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
-                  <path d="M4 6h16M7 12h10M10 18h4" stroke="#334155" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-                {sortActive && (
-                  <span style={{
-                    position: "absolute", top: 5, right: 5,
-                    width: 6, height: 6, borderRadius: "50%",
-                    background: "#4f7bff",
-                  }} />
+              {/* 정렬 아이콘 (배지 포함) — 팝오버가 이 래퍼 기준으로 아래에 붙는다 */}
+              <div style={{ position: "relative" }}>
+                <button
+                  ref={sortTriggerRef}
+                  aria-label="정렬"
+                  aria-haspopup="menu"
+                  aria-expanded={sortSheetOpen}
+                  className="flex items-center justify-center relative rounded-[10px]"
+                  style={{ width: 36, height: 36, background: sortSheetOpen ? "#e8edf3" : "transparent", transition: "background-color 120ms ease" }}
+                  onClick={() => setSortSheetOpen((v) => !v)}>
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+                    <path d="M4 6h16M7 12h10M10 18h4" stroke="#334155" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                  {sortActive && (
+                    <span style={{
+                      position: "absolute", top: 5, right: 5,
+                      width: 6, height: 6, borderRadius: "50%",
+                      background: "#4f7bff",
+                    }} />
+                  )}
+                </button>
+                {sortSheetOpen && (
+                  <SortMenu selected={sortOption} onSelect={setSortOption} onClose={() => setSortSheetOpen(false)} triggerRef={sortTriggerRef} />
                 )}
-              </button>
+              </div>
             </div>
           </>
         )}
@@ -1155,14 +2538,17 @@ function AIAgentScreen({ title, category, filterTabs, cards, cardRatio = "66%", 
       {/* Card grid */}
       {visibleCards.length > 0 ? (
         <div
-          className="grid grid-cols-2"
+          data-tutorial="template-grid"
+          /* 모바일 2열, 태블릿(768~1199px) 3열, 1200px 이상 4열 — 즐겨찾기 화면과 동일한 기준.
+             카드 비율(cardRatio)은 폭에 맞춰 그대로 유지된다 */
+          className="grid grid-cols-2 md:max-wide:grid-cols-3 wide:grid-cols-4"
           style={{
             gap: "var(--gap-card-y) var(--gap-card-x)",
             padding: `var(--gap-chips-grid) var(--gap-screen-x) var(--gap-grid-bottom)`,
           }}
         >
           {visibleCards.map((card, i) => (
-            <TemplateCard key={i} title={card.title} ratio={cardRatio} onApply={wsCategory ? () => onWorkspace?.(card.title) : undefined} />
+            <TemplateCard key={i} title={card.title} ratio={cardRatio} onApply={wsCategory ? () => onWorkspace?.(card.title, filterTabs[activeTab]) : undefined} />
           ))}
         </div>
       ) : cards.length === 0 ? (
@@ -1183,14 +2569,6 @@ function AIAgentScreen({ title, category, filterTabs, cards, cardRatio = "66%", 
       )}
     </main>
 
-    {/* 정렬 바텀시트 */}
-    {sortSheetOpen && (
-      <SortBottomSheet
-        selected={sortOption}
-        onSelect={setSortOption}
-        onClose={() => setSortSheetOpen(false)}
-      />
-    )}
     </>
   );
 }
@@ -1207,16 +2585,17 @@ function FavoritesScreen() {
       </div>
       <SearchFilterBar />
       {/* Card grid */}
-      <div className="grid grid-cols-2 gap-3 px-4 pb-6">
+      {/* 카테고리 화면과 동일한 반응형 — 768px 이상 3열, 1200px 이상 4열 */}
+      <div className="grid grid-cols-2 md:max-wide:grid-cols-3 wide:grid-cols-4 gap-3 px-4 pb-6">
         {favoritesCards.map((card, i) => (
-          <TemplateCard key={i} title={card.title} />
+          <TemplateCard key={i} title={card.title} favorited />
         ))}
       </div>
     </main>
   );
 }
 
-function MyWorkScreen() {
+function MyWorkScreen({ items = myWorkItems, onGoHome }: { items?: typeof myWorkItems; onGoHome: () => void }) {
   return (
     <main className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarWidth: "none" }}>
       {/* Page header */}
@@ -1226,15 +2605,28 @@ function MyWorkScreen() {
         </div>
         <span style={{ ...f, fontWeight: 700, fontSize: 22, color: "#0a0a0a", letterSpacing: "-0.6px" }}>내 작업</span>
       </div>
+      {items.length === 0 ? (
+        /* 빈 화면 — 첫 방문자는 여기가 비어 있다. 홈 온보딩에서 '내 작업' 단계를 뺀 대신,
+           필요한 순간(처음 들어왔을 때)에 무엇을 하면 되는지 알려 준다(2026-10-30). */
+        <div className="mx-4 mb-6 flex flex-col items-center justify-center gap-3 rounded-[20px] border border-[#e2e8f0] bg-white px-8 text-center"
+          style={{ paddingTop: 64, paddingBottom: 64, boxShadow: "0px 1px 4px rgba(0,0,0,0.04)" }}>
+          <div className="bg-[#eff6ff] rounded-[14px] size-12 flex items-center justify-center"><IconWorkBlue /></div>
+          <p style={{ ...f, fontWeight: 600, fontSize: 15, color: "#334155", letterSpacing: "-0.3px", wordBreak: "keep-all" }}>
+            아직 만든 작업이 없어요. 홈에서 첫 작업을 만들어 보세요.
+          </p>
+          <Button variant="primary" size="md" onClick={onGoHome} style={{ marginTop: 4 }}>홈으로 가기</Button>
+        </div>
+      ) : (
+      <>
       <SearchFilterBar />
       {/* List (흰색 카드 컨테이너 안에 행을 담는다) */}
       <div className="mx-4 mb-6 bg-white rounded-[20px] border border-[#e2e8f0] overflow-hidden"
         style={{ boxShadow: "0px 1px 4px rgba(0,0,0,0.04)" }}>
-        {myWorkItems.map((item, i) => {
+        {items.map((item, i) => {
           const tag = item.tag ? tagMap[item.tag] : null;
           return (
             <div key={i} className="flex items-center gap-2 px-4 py-4"
-              style={{ borderBottom: i < myWorkItems.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+              style={{ borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none" }}>
               {/* 제목 */}
               <span className="truncate flex-1" style={{ ...f, fontWeight: 600, fontSize: 14, color: "#0a0a0a", letterSpacing: "-0.35px" }}>{item.title}</span>
               {/* 태그 배지 (날짜 앞, 우측 정렬) */}
@@ -1249,87 +2641,9 @@ function MyWorkScreen() {
           );
         })}
       </div>
+      </>
+      )}
     </main>
-  );
-}
-
-// ─── 크레딧 충전 바텀시트 ────────────────────────────────────────────────────────
-
-const CREDIT_PACKAGES = [
-  { amount: 1000, price: "₩1,000" },
-  { amount: 5000, price: "₩5,000" },
-  { amount: 10000, price: "₩10,000" },
-  { amount: 50000, price: "₩50,000", best: true },
-  { amount: 100000, price: "₩100,000" },
-];
-
-function CreditBottomSheet({ onClose, onHistoryClick }: { onClose: () => void; onHistoryClick: () => void }) {
-  const [selected, setSelected] = useState(0);
-  const pkg = CREDIT_PACKAGES[selected];
-
-  return (
-    <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.35)", animation: "fadeIn 180ms ease" }} />
-      <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 51, background: "white", borderRadius: "20px 20px 0 0", paddingBottom: "env(safe-area-inset-bottom, 20px)", boxShadow: "0px -4px 24px rgba(0,0,0,0.12)", animation: "slideUp 220ms cubic-bezier(0.32,0.72,0,1)" }}>
-        {/* 드래그 핸들 */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: "#dfe6ed" }} />
-        </div>
-        {/* 헤더 */}
-        <div className="flex items-center justify-between px-5 pt-2 pb-3">
-          <span style={{ ...f, fontWeight: 700, fontSize: 18, color: "#0a0a0a", letterSpacing: "-0.5px" }}>크레딧 충전</span>
-          <button onClick={onClose} className="size-8 flex items-center justify-center rounded-full bg-[#f1f5f9]">
-            <IconClose />
-          </button>
-        </div>
-        {/* 현재 잔액 */}
-        <div className="px-5 pb-4">
-          <p style={{ ...f, fontWeight: 500, fontSize: 12, color: "#90a1b9", marginBottom: 4 }}>현재 잔액</p>
-          <p style={{ ...f, fontWeight: 700, fontSize: 22, color: "#0a0a0a", letterSpacing: "-0.8px" }}>
-            {CREDIT_BALANCE.toLocaleString()} <span style={{ fontWeight: 500, fontSize: 14, color: "#737373" }}>크레딧</span>
-          </p>
-        </div>
-        {/* 충전 패키지 */}
-        <div className="px-5 pb-2">
-          <p style={{ ...f, fontWeight: 600, fontSize: 12, color: "#90a1b9", marginBottom: 10 }}>충전 패키지</p>
-          <div className="flex flex-col gap-2.5">
-            {CREDIT_PACKAGES.map((pkg, i) => (
-              <button key={i} onClick={() => setSelected(i)}
-                className="w-full flex items-center justify-between rounded-[14px] px-4 py-3"
-                style={{ border: i === selected ? "1.5px solid #4f7bff" : "1.5px solid #e2e8f0", background: i === selected ? "#f0f5ff" : "white" }}>
-                <div className="flex items-center gap-2.5">
-                  <div className="size-6 rounded-full bg-[#eff6ff] flex items-center justify-center shrink-0">
-                    <span style={{ ...f, fontWeight: 700, fontSize: 9, color: "#4f7bff" }}>C</span>
-                  </div>
-                  <span style={{ ...f, fontWeight: 700, fontSize: 15, color: "#0a0a0a", letterSpacing: "-0.4px" }}>
-                    {pkg.amount.toLocaleString()} <span style={{ fontWeight: 500, fontSize: 13, color: "#737373" }}>크레딧</span>
-                  </span>
-                  {pkg.best && (
-                    <span className="rounded-full px-2 py-0.5" style={{ background: "#4f7bff", ...f, fontWeight: 700, fontSize: 10, color: "white" }}>BEST</span>
-                  )}
-                </div>
-                <span style={{ ...f, fontWeight: 600, fontSize: 14, color: "#334155" }}>{pkg.price}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* 충전 버튼 */}
-        <div className="px-5 pt-4 pb-2">
-          <button className="w-full h-13 rounded-[14px] flex items-center justify-center" style={{ height: 52, background: "#4f7bff" }}>
-            <span style={{ ...f, fontWeight: 700, fontSize: 16, color: "white", letterSpacing: "-0.4px" }}>
-              {pkg.price} 충전하기
-            </span>
-          </button>
-        </div>
-        <div className="flex justify-center pb-4 pt-2">
-          <button onClick={() => { onClose(); onHistoryClick(); }} style={{ ...f, fontWeight: 500, fontSize: 13, color: "#737373" }}>사용 내역 보기 →</button>
-        </div>
-      </div>
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
-      `}</style>
-    </>
   );
 }
 
@@ -1364,6 +2678,9 @@ const notificationItems = [
 
 function NotificationsPanel({ onClose, onViewAll }: { onClose: () => void; onViewAll: () => void }) {
   const [items, setItems] = useState(notificationItems);
+  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, true);
 
   const markAllRead = () => setItems(items.map((it) => ({ ...it, read: true })));
 
@@ -1376,6 +2693,7 @@ function NotificationsPanel({ onClose, onViewAll }: { onClose: () => void; onVie
       />
       {/* 패널 */}
       <div
+        ref={panelRef}
         style={{
           position: "fixed", left: 0, right: 0, top: 56, zIndex: 41,
           background: "white",
@@ -1397,9 +2715,23 @@ function NotificationsPanel({ onClose, onViewAll }: { onClose: () => void; onVie
           <div className="flex flex-col px-4">
             {items.map((item, i) => (
               <div key={i}
+                role="button"
+                tabIndex={0}
                 onClick={() => setItems(items.map((it, j) => j === i ? { ...it, read: true } : it))}
-                className="flex gap-3 py-3.5 cursor-pointer"
-                style={{ borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setItems(items.map((it, j) => j === i ? { ...it, read: true } : it));
+                  }
+                }}
+                onMouseEnter={() => setHoveredRow(i)}
+                onMouseLeave={() => setHoveredRow((v) => (v === i ? null : v))}
+                className="flex gap-3 py-3.5 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]"
+                style={{
+                  borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none",
+                  background: hoveredRow === i ? "#f8fafc" : "transparent",
+                  transition: `background-color ${motion.fast}`,
+                }}>
                 {/* 아이콘 */}
                 <div className="shrink-0 mt-0.5">
                   <div className="size-8 rounded-full flex items-center justify-center" style={{ background: item.read ? "#f1f5f9" : "#eff6ff" }}>
@@ -1418,7 +2750,12 @@ function NotificationsPanel({ onClose, onViewAll }: { onClose: () => void; onVie
                       {!item.read && <div className="size-2 rounded-full bg-[#4f7bff]" />}
                     </div>
                   </div>
-                  <p className="line-clamp-2" style={{ ...f, fontWeight: 400, fontSize: 12, color: "#737373", lineHeight: 1.6, letterSpacing: "-0.2px" }}>{item.body}</p>
+                  <ClampedText
+                    text={item.body}
+                    lines={2}
+                    style={{ ...f, fontWeight: 400, fontSize: 12, color: color.text.secondary, lineHeight: 1.6, letterSpacing: "-0.2px" }}
+                    toggleStyle={{ ...f, fontWeight: 600, fontSize: 11.5, color: "#4f7bff", letterSpacing: "-0.2px", marginTop: 4 }}
+                  />
                 </div>
               </div>
             ))}
@@ -1433,6 +2770,136 @@ function NotificationsPanel({ onClose, onViewAll }: { onClose: () => void; onVie
         @keyframes slideDown { from { transform: translateY(-12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
       `}</style>
     </>
+  );
+}
+
+// ─── 알림 — 768px 이상: 벨 버튼에 붙는 드롭다운 팝오버 ────────────────────────
+function NotificationsPopover({ anchorRef, onClose, onViewAll }: {
+  anchorRef?: React.RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+  onViewAll: () => void;
+}) {
+  const [items, setItems] = useState(notificationItems);
+  const [pos, setPos] = useState({ top: 64, right: 16, maxHeight: 560 });
+  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(boxRef, true);
+
+  const markAllRead = () => setItems(items.map((it) => ({ ...it, read: true })));
+
+  // 벨 버튼 기준 배치 — 오른쪽 끝을 벨에 맞추고, 화면 밖으로 나가면 보정한다
+  const place = useCallback(() => {
+    const W = 400, M = 12;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const r = anchorRef?.current?.getBoundingClientRect();
+    const top = r ? r.bottom + 8 : 64;
+    let right = r ? Math.max(M, vw - r.right) : M;
+    if (vw - right - W < M) right = Math.max(M, vw - W - M); // 왼쪽으로 넘칠 때 보정
+    setPos({ top, right, maxHeight: Math.max(200, Math.min(560, vh - top - M)) });
+  }, [anchorRef]);
+
+  useLayoutEffect(place, [place]);
+  useEffect(() => {
+    window.addEventListener("resize", place);
+    window.addEventListener("orientationchange", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("orientationchange", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [place]);
+
+  // 바깥 클릭 / ESC로 닫힘 (오버레이 없음)
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (boxRef.current?.contains(t)) return;
+      if (anchorRef?.current?.contains(t)) return; // 벨은 토글이므로 제외
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose, anchorRef]);
+
+  return (
+    <div
+      ref={boxRef}
+      role="dialog"
+      aria-label="알림"
+      className="fixed z-[60] rounded-2xl flex flex-col overflow-hidden"
+      style={{
+        top: pos.top, right: pos.right, width: 400, maxHeight: pos.maxHeight,
+        background: "white", boxShadow: "0px 12px 32px rgba(16,24,40,0.16)",
+        animation: "notifPopIn 160ms cubic-bezier(0.32,0.72,0,1)",
+      }}
+    >
+      {/* 헤더 — 고정 */}
+      <div className="shrink-0 flex items-center justify-between px-5 pt-4 pb-3">
+        <span style={{ ...f, fontWeight: 700, fontSize: 17, color: "#0a0a0a", letterSpacing: "-0.4px" }}>알림</span>
+        <button onClick={markAllRead} style={{ ...f, fontWeight: 600, fontSize: 12.5, color: "#4f7bff" }}>모두 읽음으로 표시</button>
+      </div>
+
+      {/* 리스트 — 이 영역만 스크롤 */}
+      <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: "thin", borderTop: "1px solid #f1f5f9" }}>
+        {items.map((item, i) => (
+          <div
+            key={i}
+            role="button"
+            tabIndex={0}
+            onClick={() => setItems(items.map((it, j) => (j === i ? { ...it, read: true } : it)))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setItems(items.map((it, j) => (j === i ? { ...it, read: true } : it)));
+              }
+            }}
+            onMouseEnter={() => setHoveredRow(i)}
+            onMouseLeave={() => setHoveredRow((v) => (v === i ? null : v))}
+            className="flex gap-3 px-5 py-4 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]"
+            style={{
+              borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none",
+              background: hoveredRow === i ? "#f1f5f9" : item.read ? "white" : "#f8fbff",
+              transition: `background-color ${motion.fast}`,
+            }}
+          >
+            <div className="shrink-0 size-10 rounded-full flex items-center justify-center" style={{ background: item.read ? "#f1f5f9" : "#eff6ff" }}>
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+                <path d={svgPaths.p1c3efea0} stroke={item.read ? "#90a1b9" : "#4f7bff"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d={svgPaths.p25877f40} stroke={item.read ? "#90a1b9" : "#4f7bff"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <p className="flex-1 truncate" style={{ ...f, fontWeight: 700, fontSize: 14, color: "#0a0a0a", letterSpacing: "-0.3px" }}>{item.title}</p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span style={{ ...f, fontWeight: 400, fontSize: 12, color: "#b0bec5", whiteSpace: "nowrap" }}>{item.time}</span>
+                  {!item.read && <span className="size-2 rounded-full bg-[#4f7bff]" />}
+                </div>
+              </div>
+              <ClampedText
+                text={item.body}
+                lines={2}
+                style={{ ...f, fontWeight: 400, fontSize: 12.5, color: color.text.secondary, lineHeight: 1.6, letterSpacing: "-0.2px", marginTop: 3 }}
+                toggleStyle={{ ...f, fontWeight: 600, fontSize: 12, color: "#4f7bff", letterSpacing: "-0.2px", marginTop: 5 }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 푸터 — 고정 */}
+      <div className="shrink-0 flex justify-center py-3.5" style={{ borderTop: "1px solid #f1f5f9" }}>
+        <button onClick={() => { onClose(); onViewAll(); }} style={{ ...f, fontWeight: 600, fontSize: 13.5, color: "#334155" }}>과거 알림 전체 보기</button>
+      </div>
+
+      <style>{`@keyframes notifPopIn { from { transform: translateY(-6px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }`}</style>
+    </div>
   );
 }
 
@@ -1479,12 +2946,17 @@ const allNotificationItems = [
 
 function NotificationsAllScreen() {
   const [items, setItems] = useState(allNotificationItems);
+  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
 
   const markAllRead = () => setItems(items.map((it) => ({ ...it, read: true })));
   const deleteAll = () => setItems([]);
 
   return (
     <main className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+      {/* 본문 읽기 폭 제한 — 태블릿 이상에서 전폭을 쓰면 한 줄이 650px 을 넘어가 읽기 힘들고,
+          본문이 2줄 안에 다 들어가버려 2줄 말줄임·더보기가 아무 일도 하지 않게 된다.
+          640 은 본문 컬럼이 약 528px 이 되는 값 — 한 줄 55자 안팎의 읽기 좋은 길이다. */}
+      <div className="flex-1 flex flex-col w-full mx-auto" style={{ maxWidth: 640 }}>
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 pt-5 pb-4">
         <span style={{ ...f, fontWeight: 700, fontSize: 20, color: "#0a0a0a", letterSpacing: "-0.5px" }}>알림</span>
@@ -1515,11 +2987,22 @@ function NotificationsAllScreen() {
           style={{ boxShadow: "0px 1px 4px rgba(0,0,0,0.04)" }}>
           {items.map((item, i) => (
             <div key={i}
+              role="button"
+              tabIndex={0}
               onClick={() => setItems(items.map((it, j) => j === i ? { ...it, read: true } : it))}
-              className="flex gap-3 px-4 py-4 cursor-pointer"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setItems(items.map((it, j) => j === i ? { ...it, read: true } : it));
+                }
+              }}
+              onMouseEnter={() => setHoveredRow(i)}
+              onMouseLeave={() => setHoveredRow((v) => (v === i ? null : v))}
+              className="flex gap-3 px-4 py-4 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4f7bff]"
               style={{
                 borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none",
-                background: item.read ? "white" : "#fafbff",
+                background: hoveredRow === i ? "#f1f5f9" : item.read ? "white" : "#fafbff",
+                transition: `background-color ${motion.fast}`,
               }}>
               {/* 아이콘 */}
               <div className="shrink-0 mt-0.5">
@@ -1542,132 +3025,17 @@ function NotificationsAllScreen() {
                     {!item.read && <div className="size-2 rounded-full bg-[#4f7bff] shrink-0" />}
                   </div>
                 </div>
-                <p style={{ ...f, fontWeight: 400, fontSize: 12.5, color: "#737373", lineHeight: 1.65, letterSpacing: "-0.2px" }}>
-                  {item.body}
-                </p>
+                <ClampedText
+                  text={item.body}
+                  lines={2}
+                  style={{ ...f, fontWeight: 400, fontSize: 12.5, color: color.text.secondary, lineHeight: 1.65, letterSpacing: "-0.2px" }}
+                  toggleStyle={{ ...f, fontWeight: 600, fontSize: 12, color: "#4f7bff", letterSpacing: "-0.2px", marginTop: 5 }}
+                />
               </div>
             </div>
           ))}
         </div>
       )}
-    </main>
-  );
-}
-
-// ─── 크레딧 사용 내역 화면 ───────────────────────────────────────────────────────
-
-// 데스크톱(CardnewsWorkspaceV2)의 크레딧 사용 내역과 동일한 정의 — 탭 2종 · 유형 9종 · 목데이터
-const USAGE_FILTER = "사용 내역";
-const BALANCE_FILTER = "환불·충전 내역";
-const CREDIT_FILTERS = [USAGE_FILTER, BALANCE_FILTER];
-
-// 사용 유형 7가지 + 충전/환불 유형
-const USAGE_TYPES = ["이미지", "랜딩페이지", "동영상", "프레젠테이션", "오디오", "문서", "서식"] as const;
-const BALANCE_TYPES = ["충전", "환불"] as const;
-type CreditType = (typeof USAGE_TYPES)[number] | (typeof BALANCE_TYPES)[number];
-
-const CREDIT_BALANCE = 11974710;
-const CREDIT_MONTHLY_USED = 2480;
-
-const creditHistoryData: {
-  date: string;
-  type: CreditType;
-  details: string;
-  change: number;
-  balance: number;
-}[] = [
-  { date: "2026. 06. 22. 오전 10:02:11", type: "환불",         details: "동영상 생성 실패 크레딧 환불",   change: 1780,   balance: 11974710 },
-  { date: "2026. 06. 22. 오전 9:49:06",  type: "이미지",       details: "월급 빼고 다 오르는 물가 카드뉴스", change: -69,   balance: 11972930 },
-  { date: "2026. 06. 15. 오후 5:13:59",  type: "프레젠테이션", details: "2026 금융 트렌드 PPT 생성",      change: -185,   balance: 11972999 },
-  { date: "2026. 06. 15. 오후 5:13:36",  type: "문서",         details: "졸업논문 템플릿 작성 안내",       change: -74,    balance: 11973184 },
-  { date: "2026. 06. 15. 오후 5:13:33",  type: "동영상",       details: "브랜드 홍보 숏폼 영상 생성",      change: -106,   balance: 11973258 },
-  { date: "2026. 06. 15. 오후 5:13:29",  type: "이미지",       details: "이미지 템플릿 편집 정보",         change: -224,   balance: 11973364 },
-  { date: "2026. 06. 15. 오후 5:12:58",  type: "랜딩페이지",   details: "딸깍넷 랜딩페이지 생성",          change: -122,   balance: 11973588 },
-  { date: "2026. 06. 15. 오후 5:12:47",  type: "서식",         details: "세금계산서 템플릿 작성 내용 문의", change: -98,   balance: 11973710 },
-  { date: "2026. 06. 15. 오후 5:12:40",  type: "오디오",       details: "브랜드 BGM 30s 생성",             change: -119,   balance: 11973808 },
-  { date: "2026. 06. 15. 오후 5:12:19",  type: "충전",         details: "크레딧 카드 충전 (VVIP 패키지)",  change: 100000, balance: 11973927 },
-  { date: "2026. 06. 15. 오후 5:12:14",  type: "서식",         details: "내용증명서 템플릿 작성 문의",     change: -67,    balance: 11973997 },
-];
-
-
-
-function CreditHistoryScreen({ onCharge }: { onCharge: () => void }) {
-  const [activeTab, setActiveTab] = useState(0);
-
-  // 데스크톱과 동일하게 크레딧 변동 부호로 사용/환불·충전을 가른다
-  const filtered = creditHistoryData.filter(it =>
-    CREDIT_FILTERS[activeTab] === BALANCE_FILTER ? it.change > 0 : it.change < 0
-  );
-
-  return (
-    <main className="flex-1 flex flex-col overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-      {/* 페이지 타이틀 */}
-      <div className="px-4 pt-5 pb-4">
-        <h1 style={{ ...f, fontWeight: 700, fontSize: 24, color: "#0a0a0a", letterSpacing: "-0.8px" }}>크레딧 사용 내역</h1>
-      </div>
-
-      {/* 잔액 카드 */}
-      <div className="mx-4 mb-4 bg-white rounded-[20px] border border-[#e2e8f0] px-5 py-5"
-        style={{ boxShadow: "0px 2px 10px rgba(0,0,0,0.05)" }}>
-        <p style={{ ...f, fontWeight: 500, fontSize: 12, color: "#9ca3af", marginBottom: 2 }}>사용 가능한 크레딧</p>
-        <div className="flex items-center justify-between gap-3 mt-1">
-          <div>
-            <p style={{ ...f, fontWeight: 700, fontSize: 28, color: "#0a0a0a", letterSpacing: "-1.1px", lineHeight: 1.1 }}>
-              {CREDIT_BALANCE.toLocaleString()}
-            </p>
-            <p style={{ ...f, fontWeight: 400, fontSize: 12, color: "#9ca3af", marginTop: 5 }}>
-              이번 달 사용한 크레딧: <span style={{ fontWeight: 600 }}>{CREDIT_MONTHLY_USED.toLocaleString()}</span>
-            </p>
-          </div>
-          <button onClick={onCharge}
-            className="shrink-0 rounded-[12px] px-4 flex items-center gap-1"
-            style={{ height: 40, background: "#0a0a0a" }}>
-            <span style={{ ...f, fontWeight: 700, fontSize: 13, color: "white", whiteSpace: "nowrap" }}>+ 크레딧 충전</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 필터 탭 + 총 건수 (데스크톱의 CATEGORY FILTERS 행) */}
-      <div className="mx-4 mb-3 pb-2 flex items-center justify-between gap-3 border-b border-[#e2e8f0]">
-        <ScrollableChips items={CREDIT_FILTERS} activeIndex={activeTab} onChange={setActiveTab} edgeClassName="" className="min-w-0" />
-        <span className="shrink-0" style={{ ...f, fontWeight: 700, fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>
-          총 {filtered.length}건
-        </span>
-      </div>
-
-      {/* 내역 리스트 */}
-      <div className="flex flex-col mx-4 mb-6 bg-white rounded-[20px] border border-[#e2e8f0] overflow-hidden"
-        style={{ boxShadow: "0px 1px 4px rgba(0,0,0,0.04)" }}>
-        {filtered.map((item, i) => {
-          const positive = item.change > 0;
-          return (
-            <div key={i} className="px-4 py-4"
-              style={{ borderBottom: i < filtered.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-              {/* 1행: 상세 내용 + 크레딧 변동 */}
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <p className="flex-1" style={{ ...f, fontWeight: 600, fontSize: 14, color: "#3b63f6", letterSpacing: "-0.35px", lineHeight: 1.3 }}>{item.details}</p>
-                <span style={{ ...f, fontWeight: 800, fontSize: 15, color: positive ? "#3b63f6" : "#ef4444", letterSpacing: "-0.4px", whiteSpace: "nowrap" }}>
-                  {positive ? "+" : ""}{item.change.toLocaleString()}
-                </span>
-              </div>
-              {/* 2행: 유형 뱃지 + 일시 + 잔액 */}
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 inline-flex items-center rounded px-1.5 py-0.5"
-                  style={{
-                    ...f, fontWeight: 800, fontSize: 10, letterSpacing: "0.3px",
-                    background: positive ? "#eff6ff" : "#f1f5f9",
-                    color: positive ? "#3b63f6" : "#475569",
-                  }}>
-                  {item.type}
-                </span>
-                <span className="truncate" style={{ ...f, fontWeight: 400, fontSize: 11.5, color: "#9ca3af" }}>{item.date}</span>
-                <span className="shrink-0" style={{ ...f, fontWeight: 700, fontSize: 12, color: "#0a0a0a", marginLeft: "auto" }}>
-                  {item.balance.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          );
-        })}
       </div>
     </main>
   );
@@ -1675,109 +3043,45 @@ function CreditHistoryScreen({ onCharge }: { onCharge: () => void }) {
 
 // ─── 워크스페이스 ────────────────────────────────────────────────────────────
 
-function WorkspaceDrawer({ open, onClose, onGoHome }: { open: boolean; onClose: () => void; onGoHome: () => void }) {
-  return (
-    <>
-      <div onClick={onClose} className="fixed inset-0 z-[92] bg-black/30 transition-opacity duration-300"
-        style={{ opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none" }} />
-      <div className="fixed top-0 left-0 h-full z-[93] w-[280px] bg-white border-r border-[#dfe6ed] flex flex-col transition-transform duration-300"
-        style={{ transform: open ? "translateX(0)" : "translateX(-100%)" }}>
-        <div className="flex items-center justify-between px-4 h-[60px] shrink-0">
-          <img alt="딸깍.net" className="h-6 w-auto object-contain" src={imgImageNet} />
-          <button onClick={onClose} className="size-9 rounded-[10px] flex items-center justify-center"><IconClose /></button>
-        </div>
-        <div className="flex flex-col gap-1 px-2 shrink-0">
-          {[
-            { icon: <IconHome />, label: "홈", onClick: () => { onGoHome(); onClose(); } },
-            { icon: <IconWork />, label: "내 작업", onClick: onClose },
-            { icon: <IconStar />, label: "즐겨찾기", onClick: onClose },
-          ].map(({ icon, label, onClick }) => (
-            <button key={label} onClick={onClick} className="h-11 rounded-[14px] flex items-center gap-3 px-3 w-full">
-              {icon}
-              <span style={{ ...f, fontWeight: 500, fontSize: 14, color: "#1e293b", letterSpacing: "-0.35px" }}>{label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex-1 overflow-y-auto mt-1 px-2" style={{ scrollbarWidth: "none" }}>
-          <div className="h-8 flex items-center px-2"><span style={{ ...f, fontWeight: 600, fontSize: 11, color: "#90a1b9", letterSpacing: "0.275px" }}>최근 대화</span></div>
-          <div className="h-9 rounded-[12px] bg-[#f1f5f9] flex items-center pl-3 pr-4 mb-1">
-            <span className="truncate" style={{ ...f, fontWeight: 600, fontSize: 13, color: "#155dfc" }}>주택임대차 표준계약서 작성 안내</span>
-          </div>
-          {recentChats.slice(0, 8).map((c) => (
-            <div key={c} className="h-8 rounded-[14px] flex items-center pl-3 pr-4">
-              <span className="truncate" style={{ ...f, fontWeight: 500, fontSize: 13, color: "#45556c" }}>{c}</span>
-            </div>
-          ))}
-        </div>
-        <div className="shrink-0 border-t border-[#dfe6ed] p-2">
-          <button className="w-full h-[50px] rounded-[18px] flex items-center gap-2.5 px-2">
-            <div className="bg-[#e0e7ff] border border-[#c7d2fe] rounded-full size-8 overflow-hidden shrink-0">
-              <img alt="최유정" className="size-full object-cover" src={imgUserAvatar} />
-            </div>
-            <div className="flex-1 min-w-0 text-left">
-              <div className="truncate" style={{ ...f, fontWeight: 600, fontSize: 13, color: "#0a0a0a" }}>최유정</div>
-              <div className="truncate" style={{ ...f, fontWeight: 400, fontSize: 11, color: "#737373" }}>cyj2406@gmail.com</div>
-            </div>
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 function WsChatInput({ onGenerate }: { onGenerate: () => void }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <div className="px-4 pb-5 pt-2" style={{ background: "#f8fafc" }}>
-      <div className="bg-white rounded-[22px]" style={{ boxShadow: "0px 2px 20px rgba(0,0,0,0.09)", border: "1px solid #e8ecf2" }}>
+    // 입력창은 콘텐츠 위에 고정으로 떠 있다. 이 띠를 불투명하게 두면 뒤 내용이
+    // 가로로 뚝 잘려 보이므로, 반투명 + 배경 블러로 뒤가 살짝 비치게 한다.
+    <div
+      className="pb-5 pt-2"
+      style={{
+        background: "rgba(248, 250, 252, 0.72)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+      }}
+    >
+      {/* 채팅 영역과 같은 정렬 축 — 카드와 입력창의 좌우 끝선이 일치한다 */}
+      <div className="mx-auto w-full max-w-[900px] px-4 md:px-6">
+      <ComposerCard variant="plain">
 
         {/* 텍스트 입력 영역 */}
-        <div className="relative px-4 pt-4 pb-3" style={{ minHeight: 80 }}>
-          <p style={{ ...f, fontWeight: 400, fontSize: 14, color: "#adb8c9", lineHeight: 1.65, paddingRight: 32 }}>
-            무엇을 만들까요? 대화로 자연스럽게 요청하거나 템플릿을 선택해 바로 생성해보세요!
+        <div
+          className="relative px-4 pt-4 pb-3 overflow-y-auto"
+          style={{ height: expanded ? COMPOSER_H.expanded : COMPOSER_H.collapsed, transition: COMPOSER_ANIM }}
+        >
+          <p style={{ ...f, fontWeight: 400, fontSize: 14, color: "#adb8c9", lineHeight: 1.65, paddingRight: 34 }}>
+            {COMPOSER_PLACEHOLDER}
           </p>
-          {/* 확장(↗↙) 아이콘 — 우상단 */}
-          <button className="absolute top-3.5 right-3.5 size-6 flex items-center justify-center" style={{ opacity: 0.38 }}>
-            <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
-              <path d="M10 2H14V6M2 14L6 10M6 14H2V10M14 2L10 6" stroke="#475569" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+          <ComposerExpandToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
         </div>
 
         {/* 하단 툴바 — 홈 ChatInputBox와 동일한 버튼(가로 스크롤 + 고정 전송 버튼 레이아웃 유지) */}
         <div className="flex items-center px-3 pb-3 gap-2">
 
-          {/* 가로 스크롤 영역 */}
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-
-            {/* 클립 첨부 */}
-            <button className="bg-white border border-[#e2e8f0] rounded-full size-[32px] flex items-center justify-center shrink-0"><IconAttach /></button>
-
-            {/* 스파클 — 연파랑 배경 */}
-            <button className="bg-[#eff6ff] border border-[rgba(79,123,255,0.25)] rounded-full size-[32px] flex items-center justify-center shrink-0"><IconSparkle /></button>
-
-            {/* 자동 프롬프트 pill */}
-            <button className="bg-white border border-[#e2e8f0] rounded-full h-[32px] flex items-center gap-1 px-2.5 shrink-0">
-              <IconAutoPrompt />
-              <span style={{ ...f, fontWeight: 600, fontSize: 11, color: "#62748e" }}>자동 프롬프트</span>
-            </button>
-
-            {/* 원문 적용 pill */}
-            <button className="bg-white border border-[#e2e8f0] rounded-full h-[32px] flex items-center gap-1 px-2.5 shrink-0">
-              <IconDocRef />
-              <span style={{ ...f, fontWeight: 600, fontSize: 11, color: "#62748e" }}>원문 적용</span>
-            </button>
-
-          </div>
+          {/* 가로 슬라이드 칩 — 워크스페이스에서는 양식 업로드 없이 기존 구성 유지 */}
+          <ComposerChips showUpload={false} />
 
           {/* 전송 버튼 — 스크롤 밖 고정 (onGenerate 동작 유지) */}
-          <button
-            onClick={onGenerate}
-            className="bg-[#4f7bff] rounded-full size-[32px] flex items-center justify-center shrink-0"
-          >
-            <IconSend />
-          </button>
+          <ComposerSendButton onClick={onGenerate} />
 
         </div>
+      </ComposerCard>
       </div>
     </div>
   );
@@ -1909,7 +3213,7 @@ function WsForm({ category }: { category: WorkspaceCategory }) {
         <label style={{ ...f, fontWeight: 600, fontSize: 13, color: "#374151" }}>주제 / 서비스 소개</label>
         <textarea className="w-full rounded-[12px] border border-[#e2e8f0] bg-white px-3.5 py-3 resize-none outline-none"
           style={{ ...f, fontSize: 13, minHeight: 80, lineHeight: 1.6 }}
-          placeholder="예: 딸깍.net — AI 문서 자동생성 서비스, 누구나 쉽게 전문 문서를 만들 수 있습니다." />
+          placeholder="예: 딸깍.net, AI 문서 자동생성 서비스. 누구나 쉽게 전문 문서를 만들 수 있습니다." />
       </div>
       <div className="flex flex-col gap-1.5">
         <label style={{ ...f, fontWeight: 600, fontSize: 13, color: "#374151" }}>스타일 톤 <span style={{ color: "#9ca3af", fontWeight: 400 }}>(선택)</span></label>
@@ -2301,7 +3605,7 @@ function ResultSheet({ category, sheetPos, onSheetChange }: {
 function FcHeader({ steps, activeStep }: { steps: string[]; activeStep: number }) {
   return (
     <div className="relative shrink-0 w-full" style={{ borderBottom: "1px solid #F0F2F5" }}>
-      <div className="flex flex-wrap gap-x-[11px] gap-y-0 items-center pb-[17px] pt-[16px] px-[18px]">
+      <div className="flex flex-wrap gap-x-[11px] gap-y-0 items-center pb-[17px] pt-[16px] px-[18px] md:px-6">
         {/* Icon */}
         <div className="shrink-0 rounded-[10px] size-[34px] flex items-center justify-center"
           style={{ background: "linear-gradient(135deg, #EEF0FF 0%, #E4E9FF 100%)" }}>
@@ -2332,7 +3636,8 @@ function FcHeader({ steps, activeStep }: { steps: string[]; activeStep: number }
 
 function FcPreview({ open, onToggle, children }: { open: boolean; onToggle: () => void; children?: React.ReactNode }) {
   return (
-    <div className="relative rounded-[15px] w-full overflow-hidden" style={{ border: "1px solid #ECEEF2" }}>
+    // md 이상에서만 아래 항목과의 간격을 24px로 벌린다(모바일 간격 유지)
+    <div className="relative rounded-[15px] w-full overflow-hidden md:mb-1" style={{ border: "1px solid #ECEEF2" }}>
       <button onClick={onToggle}
         className="bg-[#f8f9fc] min-h-[48px] w-full flex items-center gap-[10px] px-[15px] py-[13px] text-left">
         <svg className="shrink-0 size-[18px]" fill="none" viewBox="0 0 18 18">
@@ -2397,30 +3702,37 @@ function FcToggleRow({ autoOn, onToggleAuto, onToggleOriginal, origOn }: {
   );
 }
 
-function FcTextarea({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+function FcTextarea({ value, onChange, placeholder, minHeight = 60 }: { value: string; onChange: (v: string) => void; placeholder?: string; minHeight?: number }) {
   return (
     <div className="relative bg-white rounded-[14px] w-full" style={{ border: "1px solid #E3E6EB" }}>
       <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         rows={3}
         className="w-full outline-none resize-none bg-transparent px-[17px] pt-[14px] pb-[14px]"
-        style={{ ...f, fontSize: 14.5, color: "#1B2440", lineHeight: "22.48px", minHeight: 60 }} />
+        style={{ ...f, fontSize: 14.5, color: "#1B2440", lineHeight: "22.48px", minHeight }} />
     </div>
   );
 }
 
-function FcInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+/**
+ * 단일 행 입력. filled 는 앞 단계에서 넘어와 이미 채워진 값을 뜻한다
+ * — 박스 규격(반경·테두리·높이·좌우 여백)은 빈 필드와 똑같이 두고,
+ * 면만 이 화면의 보조 배경(#F8F9FC)으로 한 단계 낮춰 "완료된 값"으로 읽히게 한다.
+ * 여전히 수정 가능한 입력이므로 읽기 전용 표시(회색 글자)는 쓰지 않는다.
+ */
+function FcInput({ value, onChange, placeholder, filled = false }: { value: string; onChange: (v: string) => void; placeholder?: string; filled?: boolean }) {
   return (
-    <div className="relative bg-white rounded-[14px] w-full min-h-[48px] flex items-center" style={{ border: "1px solid #E3E6EB" }}>
+    <div className={`fc-single relative rounded-[14px] w-full min-h-[48px] flex items-center ${filled ? "" : "bg-white"}`}
+      style={{ border: "1px solid #E3E6EB", background: filled ? "#F8F9FC" : undefined }}>
       <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         className="w-full outline-none bg-transparent px-[17px] py-[15px]"
-        style={{ ...f, fontSize: 14.5, color: "#1B2440" }} />
+        style={{ ...f, fontSize: 14.5, fontWeight: filled ? 500 : undefined, color: "#1B2440" }} />
     </div>
   );
 }
 
 function FcSelect({ value, label }: { value: string; label?: string }) {
   return (
-    <div className="relative bg-white rounded-[14px] w-full min-h-[48px] flex items-center justify-between px-[17px] py-[15.5px]"
+    <div className="fc-single relative bg-white rounded-[14px] w-full min-h-[48px] flex items-center justify-between px-[17px] py-[15.5px]"
       style={{ border: "1px solid #E3E6EB" }}>
       <span style={{ ...f, fontWeight: 500, fontSize: 14.5, color: "#1B2440" }}>{value}</span>
       <svg className="shrink-0 size-4" fill="none" viewBox="0 0 16 16">
@@ -2443,11 +3755,11 @@ function FcColorField({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
-function FcPrimaryBtn({ label, onClick }: { label: string; onClick: () => void }) {
+function FcPrimaryBtn({ label, onClick, minHeight }: { label: string; onClick: () => void; minHeight?: number }) {
   return (
     <button onClick={onClick}
       className="flex-1 min-w-0 flex items-center justify-center gap-[9px] rounded-[14px] p-[15px]"
-      style={{ background: "#3B5BFE", boxShadow: "0px 4px 6px rgba(59,91,254,0.18)" }}>
+      style={{ background: "#3B5BFE", boxShadow: "0px 4px 6px rgba(59,91,254,0.18)", minHeight }}>
       <svg className="shrink-0 size-[17px]" fill="none" viewBox="0 0 17 17">
         <path d={svgCard.p31151900} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.417" />
         <path d={svgCard.p249be200} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.417" />
@@ -2457,47 +3769,47 @@ function FcPrimaryBtn({ label, onClick }: { label: string; onClick: () => void }
   );
 }
 
-function FcSecondaryBtn({ label, onClick }: { label: string; onClick: () => void }) {
+function FcSecondaryBtn({ label, onClick, minHeight }: { label: string; onClick: () => void; minHeight?: number }) {
   return (
     <button onClick={onClick}
       className="shrink-0 flex items-center justify-center rounded-[14px] px-5 py-[15px]"
-      style={{ border: "1.5px solid #E3E6EB", color: "#4B5262", ...f, fontWeight: 700, fontSize: 14 }}>
+      style={{ border: "1.5px solid #E3E6EB", color: "#4B5262", ...f, fontWeight: 700, fontSize: 14, minHeight }}>
       {label}
     </button>
   );
 }
 
 // ─── Image Form Card ──────────────────────────────────────────────────────────
-interface ImageFormState {
-  topic: string;
-  autoPrompt: boolean;
-  origText: boolean;
-  card1: string;
-  card2: string;
-  banner: string;
-  font: string;
-  color: string;
-}
 
 // ── 공통 카드 Shell ───────────────────────────────────────────────────────────
+// 폭 상한 없이 부모 콘텐츠 영역을 그대로 채운다(모든 화면 크기 공통).
+// 좌우 여백은 부모(채팅 스크롤 영역)의 페이지 패딩만 사용한다.
 const CARD_SHELL: React.CSSProperties = {
   background: "white", borderRadius: 22, border: "1px solid #ECEEF2",
   boxShadow: "0px 1px 2px rgba(16,24,40,0.04), 0px 12px 32px rgba(16,24,40,0.06)",
   display: "flex", flexDirection: "column", overflow: "hidden",
-  width: "100%", maxWidth: 380,
-  maxHeight: "calc(100dvh - 120px)",
+  width: "100%", boxSizing: "border-box",
+  // 화면에 실제로 보이는 채팅 영역 높이 — 호출부(워크스페이스)가 하단 입력창 높이를 재서 넣어 준다.
+  // 폴백은 상단바 56 + 입력창 약 146 + 여백 24. 이 값을 넘기면 CardBody 가 안에서 스크롤되고,
+  // 카드 하단(이전·생성 버튼)은 언제나 입력창 위에 남는다.
+  maxHeight: "var(--fc-card-max-h, calc(100dvh - 226px))",
 };
+// 부모가 세로 flex 컨테이너이므로 자식은 기본적으로 가로로 stretch된다.
+// min-w-0 은 긴 내용이 카드를 밀어 가로 스크롤을 만들지 않게 하는 안전장치.
+const CARD_SHELL_CLASS = "w-full min-w-0 self-stretch";
 function CardBody({ children }: { children: React.ReactNode }) {
+  // fc-body: 모든 입력 항목이 본문 전체 폭을 쓰는 1열 레이아웃(theme.css).
+  // FcInput·FcTextarea·FcSelect 가 같은 좌우 정렬선을 공유하도록 폭 기준을 full-width 로 통일했다.
   return (
     <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" } as React.CSSProperties}
-         className="flex flex-col gap-5 px-[18px] pt-[18px] pb-6">
+         className="fc-body flex flex-col gap-5 px-[18px] md:px-6 pt-[18px] pb-6">
       {children}
     </div>
   );
 }
 function CardFooter({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex gap-3 px-[18px] pb-[14px] pt-[15px]" style={{ borderTop: "1px solid #EEF0F3", flexShrink: 0 }}>
+    <div className="flex gap-3 px-[18px] md:px-6 pb-[14px] pt-[15px]" style={{ borderTop: "1px solid #EEF0F3", flexShrink: 0 }}>
       {children}
     </div>
   );
@@ -2548,7 +3860,7 @@ function ImageFormCard({ onGenerate }: { onGenerate: () => void }) {
     </div>
   );
   return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["설명 입력", "스타일", "생성"]} activeStep={0} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v => !v)}><Preview /></FcPreview>
@@ -2626,7 +3938,7 @@ function DocsFormCard({ onGenerate }: { onGenerate: () => void }) {
     { label:"합의 일자", key:"agreementDate", ph:"예) 2026-06-23" },
   ];
   return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["정보 입력","생성"]} activeStep={0} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
@@ -2664,7 +3976,7 @@ function PptFormCard({ onGenerate }: { onGenerate: () => void }) {
     </div>
   );
   if (step === 1) return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["주제 입력","내용 편집","생성"]} activeStep={0} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
@@ -2715,7 +4027,7 @@ function PptFormCard({ onGenerate }: { onGenerate: () => void }) {
     </div>
   );
   return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["주제 입력","내용 편집","생성"]} activeStep={1} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
@@ -2775,7 +4087,7 @@ function VideoFormCard({ onGenerate }: { onGenerate: () => void }) {
     </div>
   );
   if (step === 1) return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["주제 입력","장면 편집","생성"]} activeStep={0} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
@@ -2882,20 +4194,23 @@ function VideoFormCard({ onGenerate }: { onGenerate: () => void }) {
     </div>
   );
   return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["주제 입력","장면 편집","생성"]} activeStep={1} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
         <FcHelper text="주제에 맞춰 장면을 만들었어요. 확인하고 다듬은 뒤 생성하세요." />
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-col gap-1 flex-1">
+        {/* 주제 — 앞 단계에서 넘어온 값이라 아래 필드들과 같은 박스를 쓰되 면만 옅게 깐다.
+            재생성은 1단계 주제의 FcToggleRow 와 같은 자리(라벨 행 우측)에 두어 이 필드의 동작임을 보인다. */}
+        <div className="flex flex-col gap-[10px]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <FcLabel label="주제" />
-            <span style={{ ...f, fontSize:14, color:"#1B2440", fontWeight:500 }}>{s.topic || "여름철 자연재해 대비"}</span>
+            <button className="flex items-center gap-1.5 px-3 py-2 rounded-[10px]" style={{ border:"1.5px solid #E3E6EB", ...f, fontSize:12.5, fontWeight:600, color:"#4B5262", flexShrink:0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              재생성
+            </button>
           </div>
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-[10px]" style={{ border:"1.5px solid #E3E6EB", ...f, fontSize:12.5, fontWeight:600, color:"#4B5262", flexShrink:0 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            재생성
-          </button>
+          {/* 목업 기본값 — 1단계를 건너뛰고 이 화면만 보는 경우를 위한 예시 문구 */}
+          <FcInput filled value={s.topic || "여름철 자연재해 대비"} onChange={v=>set("topic",v)} placeholder="영상 주제" />
         </div>
         {/* 분위기 */}
         <div className="flex flex-col gap-[10px]">
@@ -2915,7 +4230,7 @@ function VideoFormCard({ onGenerate }: { onGenerate: () => void }) {
           {/* 장면 1 필드들 */}
           <div className="flex flex-col gap-4 rounded-[14px] p-4" style={{ border:"1px solid #EEF0F3", background:"#FBFCFD" }}>
             <div className="flex flex-col gap-[10px]">
-              <FcLabel label="장면 설명 — 무엇이 어떻게 움직이는지" />
+              <FcLabel label="장면 설명 (무엇이 어떻게 움직이는지)" />
               <FcTextarea value="" onChange={()=>{}} placeholder="예) 창문을 점검하는 사람, 차분한 긴장감" />
             </div>
             <div className="flex flex-col gap-[10px]">
@@ -2927,7 +4242,7 @@ function VideoFormCard({ onGenerate }: { onGenerate: () => void }) {
               <span style={{ ...f, fontSize:14, fontWeight:700, color:"#3B5BFE" }}>5초</span>
             </div>
             <div className="flex flex-col gap-[10px]">
-              <FcLabel label="키워드 — 분위기·디테일" />
+              <FcLabel label="키워드 (분위기·디테일)" />
               <FcInput value="" onChange={()=>{}} placeholder="예) 태풍 대비, 창문 잠금, 차분한 긴장감" />
             </div>
           </div>
@@ -2967,7 +4282,7 @@ function LandingFormCard({ onGenerate }: { onGenerate: () => void }) {
     </div>
   );
   if (step === 1) return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["주제 입력","내용 편집","생성"]} activeStep={0} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
@@ -2978,27 +4293,28 @@ function LandingFormCard({ onGenerate }: { onGenerate: () => void }) {
             <FcLabel label="주제 / 제품 소개" />
             <FcToggleRow autoOn={s.autoPrompt} onToggleAuto={() => set("autoPrompt",!s.autoPrompt)} origOn={s.origOn} onToggleOriginal={() => set("origOn",!s.origOn)} />
           </div>
-          <FcTextarea value={s.intro} onChange={v=>set("intro",v)} placeholder="예) 딸깍.net — AI 문서 자동생성 서비스. 누구나 쉽게 전문 문서를 만들 수 있습니다." />
+          <FcTextarea value={s.intro} onChange={v=>set("intro",v)} placeholder="예) 딸깍.net, AI 문서 자동생성 서비스. 누구나 쉽게 전문 문서를 만들 수 있습니다." />
         </div>
-        {/* 2. 스타일 힌트 (선택) */}
-        <div className="flex flex-col gap-[10px]">
-          <div className="flex items-center gap-1.5">
-            <FcLabel label="스타일 힌트" />
-            <span style={{ ...f, fontSize:12, color:"#98A2B3" }}>(선택)</span>
+        {/* 2·3. 스타일 힌트 + 섹션 수 — 합쳐서 100% (오른쪽 끝이 위 textarea와 일치) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex flex-col gap-[10px] min-w-0">
+            <div className="flex items-center gap-1.5">
+              <FcLabel label="스타일 힌트" />
+              <span style={{ ...f, fontSize:12, color:"#98A2B3" }}>(선택)</span>
+            </div>
+            <FcInput value={s.styleHint} onChange={v=>set("styleHint",v)} placeholder="예) 시네마틱 다크 우주" />
           </div>
-          <FcInput value={s.styleHint} onChange={v=>set("styleHint",v)} placeholder="예) 시네마틱 다크 우주" />
-        </div>
-        {/* 3. 섹션 수 */}
-        <div className="flex flex-col gap-[10px]">
-          <FcLabel label="섹션 수" />
-          <FcSelect value={s.sectionCount} />
+          <div className="flex flex-col gap-[10px] min-w-0">
+            <FcLabel label="섹션 수" />
+            <FcSelect value={s.sectionCount} />
+          </div>
         </div>
       </CardBody>
       <CardFooter><FcPrimaryBtn label="내용 생성" onClick={() => setStep(2)} /></CardFooter>
     </div>
   );
   return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["주제 입력","내용 편집","생성"]} activeStep={1} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
@@ -3007,30 +4323,35 @@ function LandingFormCard({ onGenerate }: { onGenerate: () => void }) {
         <ScrollableChips
           variant="outline"
           centerActiveOnChange
-          edgeClassName="-mx-[18px] px-[18px]"
+          edgeClassName="-mx-[18px] px-[18px] md:-mx-6 md:px-6"
           items={LANDING_SECTIONS}
           activeIndex={s.activeSection}
           onChange={(i) => set("activeSection", i)}
         />
-        {/* 제목 */}
-        <div className="flex flex-col gap-[10px]">
-          <FcLabel label="제목" />
-          <FcInput value={s.sectionTitle} onChange={v=>set("sectionTitle",v)} placeholder="예) 딸깍" />
-        </div>
-        {/* 서브 카피 */}
-        <div className="flex flex-col gap-[10px]">
-          <FcLabel label="서브 카피" />
-          <FcTextarea value={s.subCopy} onChange={v=>set("subCopy",v)} placeholder="예) 클릭 한 번으로 AI가 실행합니다." />
-        </div>
-        {/* 버튼 */}
-        <div className="flex flex-col gap-[10px]">
-          <FcLabel label="버튼" />
-          <FcInput value={s.ctaBtn} onChange={v=>set("ctaBtn",v)} placeholder="예) 시작하기" />
+        {/* 섹션 입력 — 모바일 1열(제목 → 서브 카피 → 버튼 순서 그대로),
+            768px 이상에서는 제목·버튼을 한 줄에 나란히 두고 서브 카피가 아래 전체 폭을 쓴다.
+            DOM 순서는 건드리지 않고 md 이상에서 배치만 지정해 모바일 순서를 보존한다. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 제목 */}
+          <div className="flex flex-col gap-[10px] min-w-0 md:col-start-1 md:row-start-1">
+            <FcLabel label="제목" />
+            <FcInput value={s.sectionTitle} onChange={v=>set("sectionTitle",v)} placeholder="예) 딸깍" />
+          </div>
+          {/* 서브 카피 — 항상 전체 폭 */}
+          <div className="flex flex-col gap-[10px] min-w-0 md:col-span-2 md:row-start-2">
+            <FcLabel label="서브 카피" />
+            <FcTextarea value={s.subCopy} onChange={v=>set("subCopy",v)} placeholder="예) 클릭 한 번으로 AI가 실행합니다." minHeight={120} />
+          </div>
+          {/* 버튼 */}
+          <div className="flex flex-col gap-[10px] min-w-0 md:col-start-2 md:row-start-1">
+            <FcLabel label="버튼" />
+            <FcInput value={s.ctaBtn} onChange={v=>set("ctaBtn",v)} placeholder="예) 시작하기" />
+          </div>
         </div>
       </CardBody>
       <CardFooter>
-        <FcSecondaryBtn label="이전" onClick={() => setStep(1)} />
-        <FcPrimaryBtn label="랜딩페이지 생성" onClick={onGenerate} />
+        <FcSecondaryBtn label="이전" onClick={() => setStep(1)} minHeight={52} />
+        <FcPrimaryBtn label="랜딩페이지 생성" onClick={onGenerate} minHeight={52} />
       </CardFooter>
     </div>
   );
@@ -3056,7 +4377,7 @@ function DetailFormCard({ onGenerate }: { onGenerate: () => void }) {
     </div>
   );
   if (step === 1) return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["제품 입력","내용 편집","생성"]} activeStep={0} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
@@ -3095,7 +4416,7 @@ function DetailFormCard({ onGenerate }: { onGenerate: () => void }) {
     </div>
   );
   return (
-    <div style={CARD_SHELL}>
+    <div className={CARD_SHELL_CLASS} style={CARD_SHELL}>
       <div style={{ flexShrink: 0 }}><FcHeader steps={["제품 입력","내용 편집","생성"]} activeStep={1} /></div>
       <CardBody>
         <FcPreview open={prevOpen} onToggle={() => setPrevOpen(v=>!v)}><Preview /></FcPreview>
@@ -3104,7 +4425,7 @@ function DetailFormCard({ onGenerate }: { onGenerate: () => void }) {
         <ScrollableChips
           variant="outline"
           centerActiveOnChange
-          edgeClassName="-mx-[18px] px-[18px]"
+          edgeClassName="-mx-[18px] px-[18px] md:-mx-6 md:px-6"
           items={DETAIL_SECTIONS}
           activeIndex={s.activeSection}
           onChange={(i) => set("activeSection", i)}
@@ -3140,17 +4461,27 @@ function FormCardSlot({ category, onGenerate }: { category: WorkspaceCategory; o
 }
 
 // ─── 생성 결과물 카드 ─────────────────────────────────────────────────────────
+// 미리보기 본문의 생김새를 고르는 값. 파일 형식(ViewerFileType)과 1:1은 아니다
+// — 예를 들어 docx·hwpx·xlsx·pdf 는 모두 문서 페이지 미리보기를 쓴다.
 type ResultCardVariant = "slides" | "word" | "mp4" | "html" | "png";
 
-function WsResultCard({ variant, filename, onOpen }: { variant: ResultCardVariant; filename: string; onOpen: () => void }) {
-  const meta: Record<Exclude<ResultCardVariant, "slides">, { sub: string; icon: React.ReactNode }> = {
-    word: { sub: "Word 파일", icon: <FileText size={24} color="#0a0a0a" strokeWidth={1.6} /> },
-    mp4:  { sub: "MP4 파일",  icon: <FileVideo size={24} color="#0a0a0a" strokeWidth={1.6} /> },
-    html: { sub: "HTML 파일", icon: <Compass size={24} color="#0a0a0a" strokeWidth={1.6} /> },
-    png:  { sub: "PNG 파일",  icon: <ImageIcon size={24} color="#0a0a0a" strokeWidth={1.6} /> },
-  };
+/** 파일 형식 → 결과물 카드/미리보기 아이콘 */
+const FILE_TYPE_ICON: Record<ViewerFileType, React.ReactNode> = {
+  docx: <FileText size={24} color="#0a0a0a" strokeWidth={1.6} />,
+  hwpx: <FileText size={24} color="#0a0a0a" strokeWidth={1.6} />,
+  xlsx: <FileSpreadsheet size={24} color="#0a0a0a" strokeWidth={1.6} />,
+  pdf:  <FileType2 size={24} color="#0a0a0a" strokeWidth={1.6} />,
+  pptx: <FileText size={24} color="#0a0a0a" strokeWidth={1.6} />,
+  mp4:  <FileVideo size={24} color="#0a0a0a" strokeWidth={1.6} />,
+  html: <Compass size={24} color="#0a0a0a" strokeWidth={1.6} />,
+  png:  <ImageIcon size={24} color="#0a0a0a" strokeWidth={1.6} />,
+};
+
+function WsResultCard({ variant, fileType, filename, onOpen }: {
+  variant: ResultCardVariant; fileType: ViewerFileType; filename: string; onOpen: () => void;
+}) {
   const isSlides = variant === "slides";
-  const m = isSlides ? null : meta[variant];
+  const m = isSlides ? null : { sub: FILE_TYPE_META[fileType].label, icon: FILE_TYPE_ICON[fileType] };
 
   return (
     <div className="bg-white rounded-[18px] border border-[#e8ecf2] flex items-center gap-3 px-3.5 py-3.5"
@@ -3214,102 +4545,151 @@ function PptSlidesPanel({ templateName }: { templateName: string }) {
   );
 }
 
+/**
+ * 결과물을 이루는 파일 목록 — 목업. 한 번의 요청으로 결과물 2개가 나온 상황을 가정한다.
+ *
+ * 상단바 파일 드롭다운과 다운로드 메뉴의 "전체 파일 받기 (N개)"가 이 목록 하나를 함께 본다.
+ * 개수를 따로 넘기면 목록에는 1개인데 메뉴에는 2개라고 뜨는 식으로 어긋나므로,
+ * 출처를 목록 하나로 묶어 둔다.
+ */
+function resultFileNames(filename: string): string[] {
+  const dot = filename.lastIndexOf(".");
+  const base = dot > 0 ? filename.slice(0, dot) : filename;
+  const ext = dot > 0 ? filename.slice(dot) : "";
+  return [filename, `${base}_2${ext}`];
+}
+
+/** 필터 탭이 "전체"일 때 쓰는 카테고리별 기본 결과물 형식 */
+const CATEGORY_FILE_TYPE: Record<WorkspaceCategory, ViewerFileType> = {
+  docs: "docx", ppt: "pptx", video: "mp4", landing: "html", image: "png", detail: "html",
+};
+
+/** 요청 작성 도움받기를 마치면 이 AI 작업 화면 위에 워크스페이스를 연다(뒤로 가면 이 화면).
+ * "상세페이지"는 별도 화면이 없어 이미지 작업 화면(상세페이지 필터 탭 포함)으로 보낸다. */
+const REQUEST_HELP_SCREEN: Record<WorkspaceCategory, Screen> = {
+  image: "image-ai", detail: "image-ai", docs: "docs-ai", ppt: "ppt-ai", video: "video-ai", landing: "landing-ai",
+};
+
+/** 문서 계열(docx·hwpx·xlsx·pdf)은 미리보기 본문을 문서 페이지로 공유한다. */
+const FILE_TYPE_VARIANT: Record<ViewerFileType, ResultCardVariant> = {
+  docx: "word", hwpx: "word", xlsx: "word", pdf: "word",
+  pptx: "slides", mp4: "mp4", html: "html", png: "png",
+};
+
 const RESULT_CONFIG: Record<WorkspaceCategory, {
   intro: string;
-  summary: [string, string][];
-  variant: ResultCardVariant;
-  file: (slug: string) => string;
+  /** 산출물 요약 — 확장자 문구가 결과물 형식을 따라가도록 형식을 받는다 */
+  summary: (t: ViewerFileType) => [string, string][];
+  /** 템플릿명과 무관하게 이름이 고정된 결과물(웹 페이지·슬라이드 덱) */
+  fixedName?: string;
+  /**
+   * 슬라이드형 결과물이면 장수. 확장자가 .html 이어도 내용은 여러 장짜리 덱이라,
+   * 한 장짜리 웹 문서와 달리 세로로 이어 스크롤해서 본다.
+   * 값이 없으면(기본) 지금까지처럼 한 장짜리 웹 페이지로 다룬다.
+   */
+  deckPages?: number;
   credit: number;
   agent: string;
 }> = {
   ppt: {
     intro: "요청하신 디자인 톤앤매너를 반영하여 투자자의 시선을 사로잡는 고품질 슬라이드 덱을 구성하였습니다.",
-    summary: [
+    summary: () => [
       ["온라인 슬라이드 덱", "presentation.html (슬라이드 뷰어/에디터 통합 파일)"],
       ["오프라인 발표자료", "발표 및 배포용 PPTX 파일"],
       ["슬라이드별 이미지", "각 슬라이드의 원본 디자인 이미지 7장"],
     ],
-    variant: "slides",
-    file: () => "",
+    fixedName: "presentation.pptx",
     credit: 623,
     agent: "image-ppt",
   },
   docs: {
     intro: "표준 서식과 필수 조항을 반영하여 바로 사용할 수 있는 문서를 작성하였습니다.",
-    summary: [
-      ["편집용 문서", "Word에서 편집 가능한 .docx 파일"],
+    summary: (t) => [
+      ["편집용 문서", `${FILE_TYPE_META[t].label}(.${FILE_TYPE_META[t].ext}) 형식으로 편집 가능`],
       ["서식", "표준 계약 서식 및 조항 자동 반영"],
     ],
-    variant: "word",
-    file: (s) => `${s}.docx`,
     credit: 48,
     agent: "document-generation",
   },
   video: {
     intro: "요청하신 콘셉트와 톤앤매너를 반영하여 완성도 높은 영상을 제작하였습니다.",
-    summary: [
+    summary: () => [
       ["영상 파일", "1080p 해상도의 MP4 파일"],
       ["구성", "인트로 · 본문 · 아웃트로 자동 편집"],
     ],
-    variant: "mp4",
-    file: (s) => `${s}.mp4`,
     credit: 340,
     agent: "video-generation",
   },
   landing: {
     intro: "전환에 최적화된 반응형 랜딩페이지를 제작하였습니다.",
-    summary: [
+    summary: () => [
       ["웹 페이지", "반응형 HTML 파일 (모바일·데스크톱 대응)"],
       ["구성", "히어로 · 기능 · 후기 · CTA 섹션 포함"],
     ],
-    variant: "html",
-    file: () => "presentation.html",
+    fixedName: "presentation.html",
     credit: 185,
     agent: "landing-generation",
   },
   image: {
     intro: "요청하신 콘셉트를 반영하여 고해상도 이미지를 생성하였습니다.",
-    summary: [
+    summary: () => [
       ["이미지 파일", "고해상도 PNG 파일"],
       ["구성", "메인 비주얼 및 카피 자동 배치"],
     ],
-    variant: "png",
-    file: (s) => `${s}.png`,
     credit: 120,
     agent: "image-generation",
   },
   detail: {
     intro: "제품의 매력을 강조한 반응형 상세페이지를 제작하였습니다.",
-    summary: [
+    summary: () => [
       ["웹 페이지", "반응형 HTML 파일"],
       ["구성", "제품 소개 · 특징 · 리뷰 섹션 포함"],
     ],
-    variant: "html",
-    file: () => "detail_page.html",
+    fixedName: "detail_page.html",
     credit: 160,
     agent: "detail-generation",
   },
 };
 
-function WsResult({ category, templateName }: { category: WorkspaceCategory; templateName: string }) {
+/**
+ * "결과 확인하기"가 여는 결과물 — 채팅 안이 아니라 화면(WorkspaceScreen)이 렌더한다.
+ *
+ * 데스크톱에서는 결과물 뷰어·편집기가 채팅의 형제 열로 서야 하는데, 채팅 스크롤 안쪽
+ * 카드가 직접 렌더하면 그 자리를 잡을 수 없다. 그래서 카드는 "이걸 열어 달라"고
+ * 요청만 하고, 실제 렌더는 두 열을 모두 쥐고 있는 화면이 맡는다.
+ */
+interface ResultViewerRequest {
+  variant: ResultCardVariant;
+  fileType: ViewerFileType;
+  filename: string;
+  templateName: string;
+  /** 슬라이드형 결과물의 장수. 없으면 한 장짜리다. */
+  deckPages?: number;
+}
+const OpenResultViewerContext = React.createContext<((r: ResultViewerRequest) => void) | null>(null);
+
+function WsResult({ category, templateName, fileType }: {
+  category: WorkspaceCategory; templateName: string; fileType: ViewerFileType;
+}) {
   const r = RESULT_CONFIG[category];
   const slug = templateName.trim().replace(/\s+/g, "_").replace(/[()]/g, "");
-  const filename = r.file(slug);
-  const viewerName = r.variant === "slides" ? "presentation.html" : filename;
-  const [viewerOpen, setViewerOpen] = useState(false);
+  // 파일명 확장자는 진입한 카테고리(필터 탭)가 정한 결과물 형식을 따른다.
+  const filename = r.fixedName ?? fileNameFor(slug, fileType);
+  const variant = FILE_TYPE_VARIANT[fileType];
+  const openViewer = React.useContext(OpenResultViewerContext);
 
   return (
     <div className="flex flex-col gap-3.5" style={{ animation: "wsFadeIn 450ms ease" }}>
       {/* 완료 안내 텍스트 (글자가 쭉 이어지는 형식) */}
       <div className="px-1">
         <p style={{ ...f, fontWeight: 400, fontSize: 14.5, color: "#0a0a0a", lineHeight: 1.7 }}>
-          <b style={{ fontWeight: 700 }}>'{templateName}'</b> 제작이 완료되었습니다.
+          <b style={{ fontWeight: 700 }}>'{templateName}'</b> 제작을 마쳤어요.
         </p>
         <p style={{ ...f, fontWeight: 400, fontSize: 14, color: "#374151", lineHeight: 1.75, marginTop: 10 }}>{r.intro}</p>
 
         <p style={{ ...f, fontWeight: 700, fontSize: 15, color: "#0a0a0a", letterSpacing: "-0.3px", marginTop: 18, marginBottom: 8 }}>📄 생성된 산출물 요약</p>
         <div className="flex flex-col gap-2">
-          {r.summary.map(([label, value], i) => (
+          {r.summary(fileType).map(([label, value], i) => (
             <div key={i} className="flex gap-2" style={{ ...f, fontSize: 13.5, lineHeight: 1.6 }}>
               <span style={{ color: "#94a3b8" }}>•</span>
               <p style={{ color: "#374151" }}>
@@ -3328,7 +4708,12 @@ function WsResult({ category, templateName }: { category: WorkspaceCategory; tem
       {category === "ppt" && <PptSlidesPanel templateName={templateName} />}
 
       {/* 결과물 카드 (카테고리별) */}
-      <WsResultCard variant={r.variant} filename={filename} onOpen={() => setViewerOpen(true)} />
+      <WsResultCard
+        variant={variant}
+        fileType={fileType}
+        filename={filename}
+        onOpen={() => openViewer?.({ variant, fileType, filename, templateName, deckPages: r.deckPages })}
+      />
 
       {/* 사용 크레딧 배지 — 맨 아래 */}
       <div className="flex items-center gap-2 px-1">
@@ -3338,36 +4723,275 @@ function WsResult({ category, templateName }: { category: WorkspaceCategory; tem
         </span>
         <span style={{ ...f, fontWeight: 600, fontSize: 12.5, color: "#94a3b8" }}>{r.agent}</span>
       </div>
-
-      {/* 결과 확인하기 → 전체화면 뷰어 */}
-      {viewerOpen && (
-        <ResultViewer variant={r.variant} filename={viewerName} templateName={templateName} onClose={() => setViewerOpen(false)} />
-      )}
     </div>
   );
 }
 
+// 뷰포트 분기용 공통 훅.
+// 서버에는 window가 없으므로 false(모바일 기준)로 시작하고, 클라이언트에서 즉시 실제 값으로 맞춘다.
+// change + orientationchange를 모두 구독해 창 크기 변경·기기 회전에 실시간으로 반응한다.
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(query);
+    const update = () => setMatches(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      mq.removeEventListener("change", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, [query]);
+  return matches;
+}
+
+// 768px 이상(태블릿) — 결과 뷰어·알림 팝오버·크레딧 모달의 분기 기준
+function useIsTabletUp() {
+  return useMediaQuery("(min-width: 768px)");
+}
+
+// 1200px 이상을 데스크톱으로 본다. 서식 채우기 화면(DESKTOP_MIN)과 같은 경계다.
+function useIsDesktop() {
+  return useMediaQuery("(min-width: 1200px)");
+}
+
+// 768~1199px — 태블릿 전용 홈 레이아웃(세로 중앙 정렬 + 푸터를 콘텐츠 흐름 끝에 배치)의 분기 기준.
+// 나머지 크기 조정은 theme.css 의 같은 범위 미디어 블록이 담당한다.
+function useIsTabletRange() {
+  return useMediaQuery("(min-width: 768px) and (max-width: 1199px)");
+}
+
 // ─── 결과물 뷰어 (전체화면) ────────────────────────────────────────────────────
-function ResultViewer({ variant, filename, templateName, onClose }: {
-  variant: ResultCardVariant; filename: string; templateName: string; onClose: () => void;
+// 상단바 구성은 파일 형식(fileType)이 정한다 — viewerChrome.ts의 VIEWER_CHROME.
+// 여기서는 형식에 맞는 뷰어 컴포넌트를 고르고, 편집(연필)이 열 편집기를 연결한다.
+function ResultViewer({ variant, fileType, filename, templateName, deckPages, embedded = false, onClose }: {
+  variant: ResultCardVariant; fileType: ViewerFileType;
+  filename: string; templateName: string;
+  /** 슬라이드형 결과물의 장수 — 있으면 폭과 무관하게 세로 스크롤 미리보기로 연다 */
+  deckPages?: number;
+  /** 데스크톱 2단 구성의 오른쪽 열 안에서 렌더될 때 true — 화면을 덮지 않고 열을 채운다. */
+  embedded?: boolean;
+  onClose: () => void;
 }) {
+  const isTabletUp = useIsTabletUp();
+  // 뷰어에서 편집(연필)을 누르면 형식에 맞는 편집기로 넘어간다.
+  const [editing, setEditing] = useState(false);
+  // 파일 드롭다운과 다운로드 메뉴가 함께 보는 결과물 파일 목록.
+  const files = React.useMemo(() => resultFileNames(filename), [filename]);
+
+  // 슬라이드형 결과물인지 — 확장자가 아니라 결과물 구성(RESULT_CONFIG.deckPages)이 정한다.
+  const isDeck = (deckPages ?? 0) > 1;
+
+  // png/html(단일) 은 카드뉴스형 목업 문서로 연다 — pages=4 가 textSplit.buildMockSlides 를
+  // 통해 "슬라이드 1장 = 이미지 1장" 카드 4장(표지·본문 1·본문 2·마무리)을 만든다.
+  const miniEditorMeta = {
+    png: { ratio: "4 / 5", size: "1024 × 1280 px", pages: 4, unit: "슬라이드" },
+    html: { ratio: "3 / 4", size: "1440 × 1920 px", pages: 4, unit: "슬라이드" },
+    slides: { ratio: "16 / 9", size: "1536 × 1024 px", pages: 7, unit: "슬라이드" },
+  } as const;
+
+  // 태블릿 이상: 공통 태블릿 셸(56px 상단바 + safe-area)로 감싼다.
+  if (isTabletUp) {
+    // 영상 — 커스텀 컨트롤 플레이어 전용 뷰어
+    if (fileType === "mp4") {
+      return (
+        <TabletVideoResultViewer fileName={filename} files={files} embedded={embedded} onClose={onClose} />
+      );
+    }
+
+    /* 이미지 · 웹 페이지 — 편집이 곧 결과 확인이라 미니 에디터로 바로 연다.
+       단, 슬라이드형 html(덱)은 예외다. 여러 장을 이어 훑어보는 것이 먼저라
+       아래 결과물 뷰어로 내려보내 세로 스크롤 미리보기를 쓴다.
+       children 을 넘기지 않는다 — 넘기면 TabletMiniEditor 가 그 안의 실제 캔버스
+       (BoardImages)·텍스트 분리 패널 대신 늘 이 정적 미리보기(ResultPreview)만 그려서,
+       슬라이드마다 다른 이미지도 텍스트 분리 목록도 볼 기회가 없어진다. */
+    if (fileType === "png" || (fileType === "html" && !isDeck)) {
+      const meta = miniEditorMeta[variant as keyof typeof miniEditorMeta];
+      return (
+        <TabletMiniEditor
+          fileName={filename}
+          ratio={meta.ratio}
+          canvasSize={meta.size}
+          pages={meta.pages}
+          unit={meta.unit}
+          embedded={embedded}
+          onClose={onClose}
+        />
+      );
+    }
+
+    // 프레젠테이션 — 뷰어의 편집은 미니 에디터로 이어진다
+    if (editing && fileType === "pptx") {
+      const meta = miniEditorMeta.slides;
+      return (
+        <TabletMiniEditor
+          fileName={filename}
+          ratio={meta.ratio}
+          canvasSize={meta.size}
+          pages={meta.pages}
+          unit={meta.unit}
+          embedded={embedded}
+          onClose={() => setEditing(false)}
+        >
+          <div className="w-full h-full flex flex-col">
+            <ResultPreview variant="slides" templateName={templateName} />
+          </div>
+        </TabletMiniEditor>
+      );
+    }
+
+    // 문서 계열(docx·hwpx·xlsx·pdf) — 편집은 문서 편집기로 이어진다
+    if (editing) {
+      return (
+        <TabletDocEditorViewer fileName={filename} embedded={embedded} onBack={() => setEditing(false)} onClose={onClose}>
+          <ResultPreview variant={variant} templateName={templateName} />
+        </TabletDocEditorViewer>
+      );
+    }
+
+    // 문서 계열 · 프레젠테이션 · 슬라이드형 html — 형식별 상단바를 가진 결과물 뷰어
+    return (
+      <TabletResultViewer
+        fileType={fileType}
+        fileName={filename}
+        files={files}
+        deckPages={deckPages}
+        embedded={embedded}
+        /* html 덱은 편집기가 없어 편집 진입을 주지 않는다. pptx 는 편집기가 있으므로 그대로 둔다. */
+        onEdit={isDeck && fileType !== "pptx" ? undefined : () => setEditing(true)}
+        onClose={onClose}
+      >
+        <ResultPreview variant={isDeck ? "slides" : variant} templateName={templateName} />
+      </TabletResultViewer>
+    );
+  }
+
+  // 767px 이하 — 상단바는 태블릿·데스크톱과 같은 구성을 그대로 쓰고,
+  // 상단바 아래에 "PC 에디터" 안내 스트립만 덧붙인다.
+  // 모바일에서는 편집기로 들어가지 않으므로 onEdit 은 넘기지 않는다.
+  if (fileType === "mp4") {
+    return (
+      <TabletVideoResultViewer
+        fileName={filename}
+        files={files}
+        notice={<MobileEditorNotice />}
+        onClose={onClose}
+      />
+    );
+  }
   return (
-    <div className="fixed inset-0 z-[95] bg-white flex flex-col" style={{ animation: "wsFadeIn 200ms ease" }}>
-      {/* 헤더 */}
-      <header className="h-14 flex items-center gap-1 px-3 shrink-0 bg-white">
-        <div className="flex-1 min-w-0 flex items-center gap-1">
-          <span className="truncate" style={{ ...f, fontWeight: 600, fontSize: 14, color: "#0a0a0a", letterSpacing: "-0.3px" }}>{filename}</span>
-          <ChevronDown size={15} color="#94a3b8" className="shrink-0" />
-        </div>
-        <button className="size-9 rounded-[10px] flex items-center justify-center shrink-0"><Download size={18} color="#475569" /></button>
-        <button onClick={onClose} className="size-9 rounded-[10px] flex items-center justify-center shrink-0"><XIcon size={19} color="#475569" /></button>
-      </header>
+    <TabletResultViewer
+      fileType={fileType}
+      fileName={filename}
+      files={files}
+      /* HTML 은 모바일에서 안내 스트립을 걷는다 — 화면 폭을 꽉 쓰는 결과물 위에
+         고정 띠가 얹히면 좁은 화면이 더 좁아진다. 편집은 어차피 PC 에서만 된다는 사실은
+         편집 진입점이 없는 것으로 이미 드러난다. */
+      notice={fileType === "html" ? undefined : <MobileEditorNotice />}
+      deckPages={deckPages}
+      onClose={onClose}
+    >
+      <ResultPreview variant={isDeck ? "slides" : variant} templateName={templateName} />
+    </TabletResultViewer>
+  );
+}
 
-      {/* PC 에디터 안내 — 모바일에서만, 헤더 아래 full-bleed 스트립으로 고정 (모든 카테고리 공통) */}
-      <MobileEditorNotice />
+// ── 문서 미리보기 본문 (목업) ────────────────────────────────────────────────
+// 자리표시자 막대 대신 실제 문서 텍스트를 그대로 렌더한다.
+const DOC_SECTIONS: { heading: string; rows: [string, string][] }[] = [
+  {
+    heading: "민원인 인적사항",
+    rows: [
+      ["성명", "홍길동"],
+      ["생년월일", "1988. 04. 12."],
+      ["연락처 / 주소", "010-1234-5678 / 서울특별시 강남구 테헤란로 123"],
+    ],
+  },
+  {
+    heading: "수용자 인적사항",
+    rows: [
+      ["성명", "김철수"],
+      ["민원인과의 관계", "형제"],
+      ["수용 기관", "서울남부교도소"],
+    ],
+  },
+  {
+    heading: "신청 사유",
+    rows: [
+      ["처분 일자", "2026. 06. 23."],
+      ["처분 내용", "접견 제한 처분 (30일)"],
+      ["신청 사유", "처분 사유에 사실관계 오인이 있어 재심사를 요청합니다."],
+    ],
+  },
+];
 
-      {/* 콘텐츠 스크롤 영역 */}
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col" style={{ scrollbarWidth: "none" }}>
+function DocumentPagePreview({ templateName }: { templateName: string }) {
+  return (
+    <div className="flex-1 bg-[#e9ecf0] py-5 px-4">
+      <div
+        className="mx-auto bg-white"
+        style={{
+          width: "100%",
+          maxWidth: 720,
+          boxShadow: "0 2px 14px rgba(0,0,0,0.12)",
+          padding: "clamp(28px, 6%, 56px) clamp(22px, 7%, 60px)",
+          minHeight: 660,
+        }}
+      >
+        {/* 표제 */}
+        <p className="text-center" style={{ ...f, fontWeight: 800, fontSize: 22, color: "#1B2440", letterSpacing: "-0.5px", lineHeight: 1.35 }}>
+          {templateName}
+        </p>
+        <p className="text-center" style={{ ...f, fontWeight: 500, fontSize: 13.5, color: "#4B5262", lineHeight: 1.7, marginTop: 10 }}>
+          행정처분에 대한 이의신청 및 권리 구제 신청서
+        </p>
+        <div className="mx-auto" style={{ width: 56, height: 2, background: "#1B2440", margin: "18px auto 26px" }} />
+
+        {/* 본문 섹션 */}
+        {DOC_SECTIONS.map((sec) => (
+          <div key={sec.heading} style={{ marginBottom: 24 }}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="size-2 bg-black shrink-0" />
+              <span style={{ ...f, fontWeight: 700, fontSize: 14, color: "#111" }}>{sec.heading}</span>
+            </div>
+            <div className="border border-[#c9ccd2]">
+              {sec.rows.map(([label, value], rw) => (
+                <div key={label} className="flex" style={{ borderBottom: rw < sec.rows.length - 1 ? "1px solid #d5d8dd" : "none" }}>
+                  <div className="w-[32%] px-3 py-2.5 bg-[#f3f4f6] shrink-0 flex items-center" style={{ borderRight: "1px solid #d5d8dd" }}>
+                    <span style={{ ...f, fontWeight: 600, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{label}</span>
+                  </div>
+                  <div className="flex-1 min-w-0 px-3 py-2.5">
+                    <span style={{ ...f, fontWeight: 400, fontSize: 13, color: "#111", lineHeight: 1.6 }}>{value}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* 확인 문구 · 서명란 */}
+        <p style={{ ...f, fontWeight: 400, fontSize: 13, color: "#111", marginTop: 26, lineHeight: 1.8 }}>
+          본인은 위 내용이 사실과 다름이 없음을 확인하며, 신청서 제출에 동의합니다.
+        </p>
+        <p className="text-center" style={{ ...f, fontWeight: 500, fontSize: 13, color: "#374151", marginTop: 26 }}>
+          2026년 8월 5일
+        </p>
+        <p className="text-right" style={{ ...f, fontWeight: 500, fontSize: 13, color: "#111", marginTop: 14 }}>
+          신청인: 홍길동 &nbsp;(인)
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// 결과물 미리보기 — 모바일 뷰어와 태블릿 셸이 함께 쓰는 콘텐츠(마크업 그대로)
+function ResultPreview({ variant, templateName }: { variant: ResultCardVariant; templateName: string }) {
+  return (
+    <>
       {/* ── 영상 ── */}
       {variant === "mp4" && (
         <div className="flex-1 bg-black flex items-center justify-center">
@@ -3406,96 +5030,134 @@ function ResultViewer({ variant, filename, templateName, onClose }: {
         </div>
       )}
 
-      {/* ── 문서 (Word/HWP) ── */}
-      {variant === "word" && (
-        <div className="flex-1 bg-[#e9ecf0] py-4 px-4">
-          <div className="mx-auto bg-white" style={{ maxWidth: 520, boxShadow: "0 2px 14px rgba(0,0,0,0.1)", padding: "34px 24px", minHeight: 660 }}>
-            <p className="text-center" style={{ ...f, fontWeight: 700, fontSize: 18, color: "#111", letterSpacing: "-0.3px", marginBottom: 26, lineHeight: 1.4 }}>{templateName}</p>
-            {["민원인 인적사항", "수용자 인적사항", "신청 사유"].map((h, i) => (
-              <div key={i} style={{ marginBottom: 22 }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="size-2 bg-black shrink-0" />
-                  <span style={{ ...f, fontWeight: 700, fontSize: 13.5, color: "#111" }}>{h}</span>
-                </div>
-                <div className="border border-[#c9ccd2]">
-                  {[0, 1, 2].map((rw) => (
-                    <div key={rw} className="flex" style={{ borderBottom: rw < 2 ? "1px solid #d5d8dd" : "none" }}>
-                      <div className="w-[32%] px-2.5 py-3 bg-[#f3f4f6] shrink-0" style={{ borderRight: "1px solid #d5d8dd" }}>
-                        <div className="h-2 rounded bg-[#cfd3d9]" style={{ width: "70%" }} />
-                      </div>
-                      <div className="flex-1 px-2.5 py-3"><div className="h-2 rounded bg-[#e5e7eb]" style={{ width: `${75 - rw * 12}%` }} /></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <p style={{ ...f, fontWeight: 500, fontSize: 12.5, color: "#333", marginTop: 22, lineHeight: 1.75 }}>
-              본인은 위 내용이 사실과 다름이 없음을 확인하며, 신청서 제출에 동의합니다.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* ── 문서 (Word/HWP) ── 실제 문서 페이지처럼 텍스트를 그대로 렌더한다 */}
+      {variant === "word" && <DocumentPagePreview templateName={templateName} />}
 
       {/* ── 슬라이드 ── */}
+      {/* 슬라이드 한 장 — 담기는 틀(덱의 16:9 칸, 편집기의 아트보드)을 그대로 채운다.
+          예전에는 검은 매트 위에 16:9 카드를 스스로 얹었는데, 이미 16:9 인 틀 안에 들어가면
+          매트가 이중으로 겹쳐 슬라이드 주위가 넓게 비어 보였다. */}
       {variant === "slides" && (
-        <div className="flex-1 bg-[#0f1216] flex flex-col items-center justify-center p-4 gap-5">
-          <div className="w-full rounded-[10px] overflow-hidden relative" style={{ aspectRatio: "16/9", background: "radial-gradient(120% 120% at 25% 20%, #24304c 0%, #0a0e18 70%)" }}>
-            <div className="absolute inset-0 p-5 flex flex-col justify-end">
-              <div className="h-2.5 rounded-full mb-3" style={{ width: "38%", background: "rgba(236,72,153,0.85)" }} />
-              <div className="h-4 rounded bg-white/85 mb-2.5" style={{ width: "72%" }} />
-              <div className="h-2 rounded bg-white/40" style={{ width: "56%" }} />
-            </div>
-          </div>
-          <div className="flex items-center gap-5">
-            <button className="size-9 rounded-full bg-white/10 flex items-center justify-center">
-              <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><path d="M10 3L5 8l5 5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            <span style={{ ...f, fontWeight: 600, fontSize: 12.5, color: "white" }}>1 / 7</span>
-            <button className="size-9 rounded-full bg-white/10 flex items-center justify-center">
-              <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
+        <div
+          className="flex-1 min-h-0 relative overflow-hidden"
+          style={{ background: "radial-gradient(120% 120% at 25% 20%, #24304c 0%, #0a0e18 70%)" }}
+        >
+          <div className="absolute inset-0 p-5 flex flex-col justify-end">
+            <div className="h-2.5 rounded-full mb-3" style={{ width: "38%", background: "rgba(236,72,153,0.85)" }} />
+            <div className="h-4 rounded bg-white/85 mb-2.5" style={{ width: "72%" }} />
+            <div className="h-2 rounded bg-white/40" style={{ width: "56%" }} />
           </div>
         </div>
       )}
 
       {/* ── 웹 페이지 (랜딩/상세) ── */}
-      {variant === "html" && (
-        <div className="flex-1 bg-[#f1f5f9] p-4">
-          <div className="mx-auto bg-white rounded-[14px] overflow-hidden border border-[#e2e8f0]" style={{ maxWidth: 480, boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
-            <div className="relative" style={{ aspectRatio: "16/11", background: "linear-gradient(135deg,#1e293b 0%,#0f172a 100%)" }}>
-              <div className="absolute inset-0 p-6 flex flex-col justify-center gap-2.5">
-                <div className="h-2 rounded bg-white/45" style={{ width: "28%" }} />
-                <div className="h-5 rounded bg-white/85" style={{ width: "74%" }} />
-                <div className="h-2.5 rounded bg-white/40" style={{ width: "58%" }} />
-                <div className="h-7 rounded-full mt-2" style={{ width: "40%", background: "#4f7bff" }} />
-              </div>
-            </div>
-            <div className="p-6 flex flex-col gap-5">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="flex flex-col gap-2">
-                  <div className="h-3 rounded bg-[#cbd5e1]" style={{ width: "45%" }} />
-                  <div className="h-2 rounded bg-[#e2e8f0]" style={{ width: "92%" }} />
-                  <div className="h-2 rounded bg-[#e2e8f0]" style={{ width: "80%" }} />
-                </div>
-              ))}
-            </div>
-          </div>
+      {variant === "html" && <HtmlPagePreview />}
+    </>
+  );
+}
+
+/**
+ * 웹 페이지 결과물 미리보기.
+ *
+ * 태블릿 이상에서는 흰 카드를 회색 바탕 위에 올려 "브라우저 안의 페이지"처럼 보여 주고,
+ * 모바일에서는 그 껍데기를 전부 걷어낸다 — 웹 페이지는 원래 화면 폭을 그대로 쓰는 것이고,
+ * 좁은 화면에서 좌우 여백 + 테두리 + 라운드까지 얹으면 볼 수 있는 폭만 줄어든다.
+ *
+ * 본문이 짧아도 흰 면이 아래까지 이어지도록 flex-1 을 준다. 그러지 않으면 콘텐츠가
+ * 위쪽에만 몰리고 그 아래로 회색 바탕이 넓게 남아, 결과물이 잘린 것처럼 보인다.
+ */
+function HtmlPagePreview() {
+  const isTabletUp = useIsTabletUp();
+
+  const body = (
+    <>
+      <div className="relative shrink-0" style={{ aspectRatio: "16/11", background: "linear-gradient(135deg,#1e293b 0%,#0f172a 100%)" }}>
+        <div className="absolute inset-0 p-6 flex flex-col justify-center gap-2.5">
+          <div className="h-2 rounded bg-white/45" style={{ width: "28%" }} />
+          <div className="h-5 rounded bg-white/85" style={{ width: "74%" }} />
+          <div className="h-2.5 rounded bg-white/40" style={{ width: "58%" }} />
+          <div className="h-7 rounded-full mt-2" style={{ width: "40%", background: "#4f7bff" }} />
         </div>
-      )}
+      </div>
+      <div className="flex-1 p-6 flex flex-col gap-5">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex flex-col gap-2">
+            <div className="h-3 rounded bg-[#cbd5e1]" style={{ width: "45%" }} />
+            <div className="h-2 rounded bg-[#e2e8f0]" style={{ width: "92%" }} />
+            <div className="h-2 rounded bg-[#e2e8f0]" style={{ width: "80%" }} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
+  if (!isTabletUp) {
+    // 모바일 — full-bleed. 감싸는 카드 없이 결과물이 곧 화면이다.
+    return <div className="flex-1 flex flex-col bg-white">{body}</div>;
+  }
+
+  return (
+    <div className="flex-1 bg-[#f1f5f9] p-4">
+      <div
+        className="mx-auto bg-white rounded-[14px] overflow-hidden border border-[#e2e8f0] flex flex-col"
+        style={{ maxWidth: 480, boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
+      >
+        {body}
       </div>
     </div>
   );
 }
 
 // ─── Workspace ────────────────────────────────────────────────────────────────
-function WorkspaceScreen({ category, templateName, onBack, onCreditClick, onBellClick }: {
+
+function WorkspaceScreen({ category, templateName, fileType, request, onBack, onCreditClick, onBellClick }: {
   category: WorkspaceCategory; templateName: string;
+  /** 요청 작성 도우미로 들어온 경우 — 상세 프롬프트 폼 대신 "확인이 필요해요" 카드를 띄운다 */
+  request?: RequestHandoff;
+  /** 진입한 카테고리(필터 탭)가 정한 결과물 형식 — 확장자와 뷰어 상단바를 함께 결정한다 */
+  fileType: ViewerFileType;
   onBack: () => void; onCreditClick: () => void; onBellClick: () => void;
 }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [stepsOpen, setStepsOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLDivElement>(null);
+  const isDesktop = useIsDesktop();
+
+  // ── 결과물 뷰어·에디터 ────────────────────────────────────────────────────
+  // "결과 확인하기"가 여는 대상. 데스크톱에서는 채팅의 형제 열로, 그보다 좁은 화면에서는
+  // 지금처럼 화면을 덮는 오버레이로 렌더한다.
+  const [viewerReq, setViewerReq] = useState<ResultViewerRequest | null>(null);
+  const openViewer = useCallback((r: ResultViewerRequest) => setViewerReq(r), []);
+  const closeViewer = useCallback(() => setViewerReq(null), []);
+
+  // 2단 구성일 때의 접기 상태 — 경계 토글과 에디터 상단바의 전체화면 버튼이 함께 본다.
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const split = useMemo(
+    () => ({ chatCollapsed, toggle: () => setChatCollapsed((v) => !v) }),
+    [chatCollapsed],
+  );
+  // 결과물을 닫으면 다음 번에 다시 2단으로 열리도록 접기 상태를 되돌린다.
+  useEffect(() => { if (!viewerReq) setChatCollapsed(false); }, [viewerReq]);
+
+  const splitActive = isDesktop && !!viewerReq;
+  // 2단 구성이 아닐 때(오버레이로 열린 뒤 창을 줄인 경우 등)는 접기 상태를 무시한다.
+  const chatHidden = splitActive && chatCollapsed;
+
+  // 하단 입력창은 fixed라 채팅 스크롤 위에 겹쳐 뜬다.
+  // 그 높이를 실제로 재서 (1) 스크롤 하단 여백과 (2) 폼 카드의 최대 높이에 쓴다.
+  // 예전에는 둘 다 상수(130px / 120px)로 잡혀 있었는데, 입력창이 그보다 높아지면
+  // 상세 프롬프트 카드가 화면에 보이는 높이보다 커져 카드 하단(이전·생성 버튼)이
+  // 입력창 뒤로 잘려 들어갔다.
+  const [promptH, setPromptH] = useState(130);
+  useEffect(() => {
+    const el = promptRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setPromptH(entry.contentRect.height));
+    ro.observe(el);
+    setPromptH(el.getBoundingClientRect().height);
+    return () => ro.disconnect();
+  }, []);
 
   const wsSteps: { type: "read" | "help"; text: string; file: boolean }[] = [
     { type: "read", text: "이미지 생성 스킬의 워크플로우를 확인하기 위해 SKILL.md 파일을 읽습니다.", file: true },
@@ -3504,6 +5166,14 @@ function WorkspaceScreen({ category, templateName, onBack, onCreditClick, onBell
   ];
 
   const handleGenerate = () => setGenerated(true);
+
+  // 요청 작성 도우미로 들어오면 "확인이 필요해요" 카드가 첫 화면에서 바로 보이도록(하단 버튼까지)
+  // 채팅을 카드 쪽으로 내려 둔다.
+  useEffect(() => {
+    if (!request) return;
+    const t = setTimeout(() => chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight }), 50);
+    return () => clearTimeout(t);
+  }, [request]);
 
   // 결과물이 렌더된 뒤 스크롤을 맨 아래로 이동
   useEffect(() => {
@@ -3517,23 +5187,54 @@ function WorkspaceScreen({ category, templateName, onBack, onCreditClick, onBell
   const promptBottom = "0px";
 
   return (
-    <div className="fixed inset-0 z-[90] bg-[#f8fafc] flex flex-col">
+    <OpenResultViewerContext.Provider value={openViewer}>
+    <div
+      /* 본문 컬럼 안에서만 덮는다 — 왼쪽 도킹 사이드바는 가리지 않는다.
+         (화면 전체를 덮던 fixed 시절에는 워크스페이스 전용 드로어가 따로 필요했다) */
+      className="absolute inset-0 z-[90] bg-[#f8fafc] flex"
+      /* 상단바(56px) + 하단 입력창 + 숨 쉴 여백을 뺀, 카드가 실제로 쓸 수 있는 높이.
+         CARD_SHELL 이 이 값을 max-height 로 받는다. */
+      style={{ "--fc-card-max-h": `calc(100dvh - ${56 + promptH + 24}px)` } as React.CSSProperties}
+    >
       <style>{`
         @keyframes wsFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes wsSlideRight { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:translateX(0); } }
         @keyframes wsDot { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
       `}</style>
-      <WorkspaceDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onGoHome={onBack} />
-
+      {/* ── 채팅 열 ─────────────────────────────────────────────────────────
+          결과물이 열리지 않았을 때는 화면 전체를, 2단 구성에서는 왼쪽 40% 를 쓴다.
+          폭은 두 상태(40% · 0%)만 오가고 중간값은 없다 — 드래그 리사이즈를 두지 않는 이유는
+          splitView.ts 주석 참고. 오른쪽 열의 min-width 때문에 창이 좁으면 이 열이 먼저 양보한다. */}
+      <div
+        className="relative min-h-0 flex flex-col overflow-hidden"
+        style={{
+          flex: splitActive ? `0 1 ${chatHidden ? "0px" : CHAT_COL_BASIS}` : "1 1 100%",
+          minWidth: 0,
+          borderRight: splitActive && !chatHidden ? "1px solid #e5e9ef" : undefined,
+          /* 접히는 동안에는 보이다가, 폭이 0이 된 뒤에야 숨는다.
+             visibility 로 감춰야 접힌 패널의 버튼이 탭 순서와 스크린리더에서도 함께 빠진다. */
+          visibility: chatHidden ? "hidden" : "visible",
+          transition:
+            `flex-basis ${SPLIT_ANIM_MS}ms ${SPLIT_EASE}, ` +
+            `visibility 0s linear ${chatHidden ? SPLIT_ANIM_MS : 0}ms`,
+        }}
+      >
       {/* TopBar */}
       <header className="h-14 flex items-center gap-3 px-4 shrink-0 bg-[#f8fafc] z-10">
-        <button onClick={() => setDrawerOpen(true)} className="flex items-center justify-center size-9 rounded-[10px] opacity-80 shrink-0"><IconMenu /></button>
+        {/* 좁은 화면에서만 직전 화면으로 돌아가는 ←. 데스크톱에서는 옆에 도킹된
+            사이드바가 이동을 맡으므로 이 자리를 비운다.
+            히스토리(back)가 아니라 onBack 을 쓴다 — 이 앱은 라우터가 없어
+            화면 전환이 히스토리에 쌓이지 않으므로 history.back() 은 앱 밖으로 나간다. */}
+        {!isDesktop && (
+          <IconButton onClick={onBack} aria-label="뒤로 가기" className="flex items-center justify-center size-9 shrink-0"><IconChevronLeft /></IconButton>
+        )}
         <p className="flex-1 truncate" style={{ ...f, fontWeight: 600, fontSize: 15, color: "#0a0a0a", letterSpacing: "-0.4px" }}>{templateName}</p>
       </header>
 
       {/* Chat scroll */}
-      <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 pb-4" style={{ paddingBottom: `calc(${promptBottom === "0px" ? "130px" : promptBottom} + 80px)`, scrollbarWidth: "none" }}>
-        <div className="flex flex-col gap-3.5" style={{ animation: "wsFadeIn 300ms ease" }}>
+      <div ref={chatScrollRef} className="flex-1 overflow-y-auto pb-4" style={{ paddingBottom: `${promptH + 80}px`, scrollbarWidth: "none" }}>
+        {/* 채팅 정렬 축 — 말풍선·단계 아코디언·상세 프롬프트 카드·결과가 모두 이 래퍼 안에서 같은 좌우 끝선을 쓴다 */}
+        <div className="mx-auto w-full max-w-[900px] px-4 md:px-6 flex flex-col gap-3.5" style={{ animation: "wsFadeIn 300ms ease" }}>
           {/* Template preview card — 사용자 메시지처럼 오른쪽 정렬 + 축소 */}
           <div className="flex justify-end">
             <div className="rounded-[16px] overflow-hidden" style={{ width: "66%", background: "#eef1f7", boxShadow: "0px 2px 10px rgba(0,0,0,0.06)" }}>
@@ -3558,7 +5259,7 @@ function WorkspaceScreen({ category, templateName, onBack, onCreditClick, onBell
           {/* 사용자 말풍선 — 오른쪽 정렬 */}
           <div className="flex justify-end">
             <div className="rounded-[18px] rounded-tr-[6px] px-4 py-3" style={{ background: "#e5e9f0", maxWidth: "82%" }}>
-              <p style={{ ...f, fontSize: 14.5, color: "#0a0a0a", lineHeight: 1.6, fontWeight: 400 }}>이 템플릿으로 시작할게요. 어떤 내용을 채워야 하는지 알려주세요.</p>
+              <p style={{ ...f, fontSize: 14.5, color: "#0a0a0a", lineHeight: 1.6, fontWeight: 400 }}>{request ? `‘${request.topic}’ 주제로 이 템플릿을 채워 주세요.` : "이 템플릿으로 시작할게요. 어떤 내용을 채워야 하는지 알려주세요."}</p>
             </div>
           </div>
 
@@ -3601,19 +5302,72 @@ function WorkspaceScreen({ category, templateName, onBack, onCreditClick, onBell
           </div>
 
           {/* Form card — category-specific slot */}
-          <FormCardSlot category={category} onGenerate={handleGenerate} />
+          {request
+            ? <RequestCardsPanel handoff={request} onGenerate={handleGenerate} />
+            : <FormCardSlot category={category} onGenerate={handleGenerate} />}
 
           {/* 생성 결과물 — 생성하기 클릭 후 노출 */}
-          {generated && <WsResult category={category} templateName={templateName} />}
+          {generated && <WsResult category={category} templateName={templateName} fileType={fileType} />}
 
         </div>
       </div>
 
-      {/* Fixed prompt input */}
-      <div className="fixed left-0 right-0 z-[89]" style={{ bottom: promptBottom }}>
+      {/* 하단 입력창 — 채팅 열 안쪽에 고정된다(2단 구성에서 에디터 열까지 넘어가지 않도록 absolute) */}
+      <div ref={promptRef} className="absolute left-0 right-0 z-[89]" style={{ bottom: promptBottom }}>
         <WsChatInput onGenerate={handleGenerate} />
       </div>
+      </div>
+
+      {/* ── 에디터 열 ───────────────────────────────────────────────────────
+          채팅과 형제로 폭을 나눠 갖는다(오버레이 아님).
+          min-width 로 상단바가 깨지는 폭 아래로는 절대 내려가지 않게 못박는다. */}
+      {splitActive && (
+        <div
+          className="relative min-h-0 flex"
+          style={{ flex: "1 1 auto", minWidth: EDITOR_MIN_W }}
+        >
+          {/* 접혔을 때 토글이 설 자리.
+              펼쳐져 있으면 토글은 채팅과의 경계에 반쯤 걸쳐 서므로 자리가 필요 없지만,
+              접히면 걸칠 경계가 없어 이 홈이 대신 자리를 내준다 — 이게 없으면
+              토글이 에디터의 좌측 도구 레일 위에 그대로 얹힌다. */}
+          <div
+            className="shrink-0"
+            style={{
+              width: chatHidden ? 14 : 0,
+              background: "#f8fafc",
+              transition: `width ${SPLIT_ANIM_MS}ms ${SPLIT_EASE}`,
+            }}
+          />
+
+          <div className="relative flex-1 min-w-0">
+            <SplitViewContext.Provider value={split}>
+              <ResultViewer
+                variant={viewerReq!.variant}
+                fileType={viewerReq!.fileType}
+                filename={viewerReq!.filename}
+                templateName={viewerReq!.templateName}
+                deckPages={viewerReq!.deckPages}
+                embedded
+                onClose={closeViewer}
+              />
+            </SplitViewContext.Provider>
+          </div>
+        </div>
+      )}
+
+      {/* 데스크톱보다 좁은 화면 — 결과물은 지금처럼 화면을 덮는 전체화면으로 연다 */}
+      {viewerReq && !isDesktop && (
+        <ResultViewer
+          variant={viewerReq.variant}
+          fileType={viewerReq.fileType}
+          filename={viewerReq.filename}
+          templateName={viewerReq.templateName}
+          deckPages={viewerReq.deckPages}
+          onClose={closeViewer}
+        />
+      )}
     </div>
+    </OpenResultViewerContext.Provider>
   );
 }
 
@@ -3639,63 +5393,399 @@ function Footer() {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
+// [formfill 임시] 모듈 로드 시 1회만 판정 — 렌더 중에 값이 바뀌지 않아 훅 순서에 영향이 없다.
+const FORMFILL_DEV = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("formfill") === "1";
+
+/**
+ * ?textsplit=1 로 미니 에디터를 곧장 연다 (DEV_PANEL과 같은 방식).
+ *
+ * 지금 실제 화면(ResultViewer)의 두 진입점은 항상 children(정적 미리보기)을 넘겨
+ * TabletMiniEditor 에 꽂아서, 그 안의 실제 캔버스(BoardImages)·텍스트 분리 패널이
+ * 그려질 기회 자체가 없다 — 그 코드 경로를 보려면 이 길뿐이다. ?devpanel=1 을 더하면
+ * 문서 프리셋(A~F)·분리 결과 시나리오를 고르는 개발 패널도 함께 뜬다.
+ *
+ * ⚠ 서비스 오픈 전에 반드시 처리할 것 ⚠
+ * DEV_PANEL 과 똑같은 이유로 빌드 시점 조건이 일부러 없다 — 배포된 미리보기 링크로도
+ * 확인해야 해서 프로덕션 번들에도 그대로 들어간다. 즉 이 파일이 나간 곳이면 어디서든
+ * 주소에 ?textsplit=1 만 붙이면 누구나 이 진입로를 열 수 있다. 오픈 전에 둘 중 하나를 할 것:
+ *   1) `import.meta.env.DEV &&` 를 앞에 붙여 개발 빌드로 한정한다
+ *   2) 이 상수와 아래 if 블록, import 1줄을 함께 지운다
+ */
+const TEXTSPLIT_DEV = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("textsplit") === "1";
+
 export default function App() {
+  if (FORMFILL_DEV) return <FormFillPlayground />; // [formfill 임시] 이 줄과 위 2줄, import 1줄만 지우면 원상 복구
+  if (TEXTSPLIT_DEV) {
+    return (
+      <TabletMiniEditor
+        fileName="텍스트 분리 개발 도구.png"
+        ratio="4 / 5"
+        canvasSize="1024 × 1280 px"
+        pages={4}
+        unit="슬라이드"
+        onClose={() => { window.location.href = window.location.pathname; }}
+      />
+    );
+  }
+
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // 데스크톱의 도킹 사이드바가 아이콘 레일로 접혀 있는지. 오버레이 드로어(좁은 화면)와는
+  // 별개의 상태다 — 창을 줄였다 늘려도 접기 선택이 그대로 남는다.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [screen, setScreen] = useState<Screen>("home");
-  const [creditOpen, setCreditOpen] = useState(false);
+  /**
+   * 뒤로 가기 스택 — navigate() 로 화면을 옮길 때마다 "떠나기 직전 화면"을 쌓아 두고,
+   * goBack() 은 그 마지막 값을 그대로 되돌린다. 이전에는 상단바 뒤로 가기가 항상
+   * "home" 으로 고정돼 있었는데, 그러면 예를 들어 크레딧 사용 내역 → 요금제 페이지처럼
+   * 서브 화면끼리 오간 다음 뒤로 가면 원래 있던 화면(사용 내역)이 아니라 항상 홈으로
+   * 튀었다. 스택은 push/pop만 하므로 요금제 ↔ 사용 내역을 여러 번 오가도(각 이동이
+   * 스택에 한 칸씩 쌓일 뿐) 순환하지 않고 뒤로 갈 때마다 정확히 한 단계씩 풀린다.
+   */
+  const [screenHistory, setScreenHistory] = useState<Screen[]>([]);
+  // "요금제 및 크레딧" 구매 페이지를 열 때 어느 탭으로 들어갈지("월 구독 요금제" 기본,
+  // 설정의 "크레딧 충전"은 추가 충전 탭으로 바로 연다).
+  const [pricingTab, setPricingTab] = useState<PricingTab>("subscription");
+  // 이미 "pricing" 화면에 머무는 중에 openPricing()을 다시 불러도 PricingPage가 확실히
+  // 그 탭으로 다시 열리도록 강제 리마운트시키는 키 — navigate()는 같은 화면으로의 이동을
+  // 스택에 쌓지 않으므로 pricingTab prop만으로는(이미 마운트된 컴포넌트의 내부 state라)
+  // 반영되지 않는다.
+  const [pricingNavKey, setPricingNavKey] = useState(0);
+  // 구독 완료 화면 문구 분기 — 미구독에서 새로 시작한 것과 기존 요금제를 바꾼 것은
+  // 사용자에게 다른 일이라 같은 "구독이 시작되었어요" 문구로 뭉뚱그리지 않는다.
+  const [wasPlanChange, setWasPlanChange] = useState(false);
+  const [creditBalance] = useCreditBalance();
   const [notifOpen, setNotifOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [workspace, setWorkspace] = useState<{ category: WorkspaceCategory; templateName: string } | null>(null);
+  // 설정을 열 때 어느 탭으로 들어갈지("화면 설정" 기본, 프로필의 "내역 보기 ›"는 크레딧
+  // 내역 탭으로 바로 연다). 설정은 화면(screen)이 아니라 오버레이 모달이라 screenHistory
+  // 스택에 안 쌓인다 — 그래서 "구매 페이지를 설정에서 열었다가 돌아오면 설정을 다시
+  // 연다"를 이 두 상태로 직접 관리한다.
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>("화면 설정");
+  const [settingsNavKey, setSettingsNavKey] = useState(0);
+  const [pendingSettingsReturnTab, setPendingSettingsReturnTab] = useState<SettingsTab | null>(null);
+  // fileType — "템플릿 적용하기"로 들어온 카테고리(필터 탭)가 정한 결과물 형식.
+  // 워드 → .docx / 한글 → .hwpx / 엑셀 → .xlsx / 논문 → .pdf / 영상 → .mp4
+  const [workspace, setWorkspace] = useState<
+    { category: WorkspaceCategory; templateName: string; fileType: ViewerFileType; request?: RequestHandoff } | null
+  >(null);
+  const openWorkspace = (category: WorkspaceCategory) => (templateName: string, tabLabel: string) =>
+    setWorkspace({
+      category,
+      templateName,
+      fileType: resolveFileType(tabLabel, CATEGORY_FILE_TYPE[category]),
+    });
 
-  const isSubScreen = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai", "credit-history", "notifications-all"].includes(screen);
+  // 홈 — 검색어. screen 문자열만으로는 "어떤
+  // 검색어인지"를 담을 수 없어 따로 든다.
+  const [searchQuery, setSearchQuery] = useState("");
+  /** "요청 작성 도움받기"를 취소하고 홈으로 돌아왔을 때만 켜서, 홈의 도우미 버튼에 포커스를
+   *  되돌린다 — 완료(다른 화면으로 이동)나 그냥 홈에 들어올 때는 켜지 않는다. */
+  const [focusHelperCta, setFocusHelperCta] = useState(false);
+
+  const openSearch = (query: string) => { setSearchQuery(query); navigate("search"); };
+  /** 레이어 분리 — 홈 아이콘 줄에서 바로 여는 이미지 미니 에디터(텍스트 분리 패널 포함). 워크스페이스를 거치지 않는다. */
+  const [layerEditorOpen, setLayerEditorOpen] = useState(false);
+  // 딸깍 UI 디자인 에디터(2026-11-13) — 워크스페이스처럼 본문 컬럼을 덮는다. docs/ui-design-editor.md
+  const [uiDesignOpen, setUiDesignOpenRaw] = useState(false);
+  // 한글·워드 편집기(2026-11-19) — UI 디자인 에디터와 같은 집중 모드. docs/doc-editor.md
+  const [docEditor, setDocEditor] = useState<DocKind | null>(null);
+  // 사이드바 "최근 작업"에서 연 파일 — 편집기를 그 파일로 연다(없으면 새 빈 파일)
+  const [docInitialId, setDocInitialId] = useState<string | undefined>();
+  // 홈 B안(2026-11-20 시안) — 지우려면 이 블록 · HomeB 렌더 · HomeVariantSwitch · components/home/HomeB.tsx 를 지운다
+  const [homeVariant, setHomeVariantRaw] = useState<"a" | "b">(() => { try { return localStorage.getItem("ddalkkak.homeVariant") === "b" ? "b" : "a"; } catch { return "a"; } });
+  const setHomeVariant = (v: "a" | "b") => { setHomeVariantRaw(v); try { localStorage.setItem("ddalkkak.homeVariant", v); } catch { /* 이번 세션만 */ } };
+  const [docStart, setDocStart] = useState<{ template?: { id: string; withAi: boolean }; prompt?: string; key: number } | undefined>();
+  const [uiInitialId, setUiInitialId] = useState<string | undefined>();
+  /** 에디터(UI 디자인·한글·워드)는 한 번에 하나. 닫을 때는 둘 다 닫는다 */
+  const setUiDesignOpen = (open: boolean) => { setUiDesignOpenRaw(open); setDocEditor(null); };
+  const editorOpen = uiDesignOpen || !!docEditor;
+  /** 홈 아이콘 줄 → 편집기. 레이어 분리는 이미지 미니 에디터, UI 디자인은 UI 디자인 에디터, 나머지(한글·워드·엑셀·PPT·PDF·영상·이미지)는
+   *  공통 셸 편집기(doceditor, 2026-11-19). 예전엔 빈 템플릿 워크스페이스를 열었다. */
+  const openEditor = (kind: EditorKind) => {
+    if (kind === "layer") { setLayerEditorOpen(true); return; }
+    setDocInitialId(undefined); setUiInitialId(undefined); setDocStart(undefined);
+    if (kind === "uidesign") { setUiDesignOpen(true); return; }
+    setUiDesignOpenRaw(false);
+    setDocEditor(kind);
+  };
+  const openTemplate = (template: TaskTemplate) => {
+    const task = getTaskById(template.taskId);
+    if (task?.wsCategory) openWorkspace(task.wsCategory)(template.title, task.tabLabel ?? "전체");
+  };
+
+  // 서식 채우기 — screen 문자열만으로는 "어떤 서식인지"를 담을 수 없어 대상만 따로 든다.
+  const [fillTarget, setFillTarget] = useState<{ id: string; title: string } | null>(null);
+  // 서식 목록의 필터칩·정렬·스크롤. 목록이 언마운트돼도 유지되도록 App 이 보관한다.
+  const [formsTab, setFormsTab] = useState(0);
+  const [formsSort, setFormsSort] = useState<SortOption>("인기순");
+  const formsScrollTop = useRef(0);
+
+  // 홈 온보딩 '다시 보기' 요청 — 값이 바뀔 때마다 HomeOnboarding 이 처음부터 다시 띄운다(첫 방문 자동 노출은 컴포넌트가 직접 판단)
+  const [onboardingReplay, setOnboardingReplay] = useState(0);
+  // 알림 팝오버의 앵커(헤더 벨 버튼)
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const isTabletRange = useIsTabletRange();
+  // 768px 이상에서는 알림·크레딧을 팝오버/모달로 바꿔 렌더한다(컴포넌트 자체를 교체 — CSS 숨김 아님)
+  const isTabletUp = useIsTabletUp();
+  // 1200px 이상 — 사이드바가 오버레이 드로어가 아니라 도킹 컬럼이 된다.
+  const isDesktop = useIsDesktop();
+
+  /**
+   * 사이드바 이동. 워크스페이스는 screen 과 별개의 상태로 본문을 덮고 있어,
+   * 함께 지우지 않으면 "홈"을 눌러도 워크스페이스가 그대로 남는다.
+   * (예전에는 워크스페이스 전용 드로어가 onGoHome 으로 같은 일을 했다.)
+   *
+   * 지금 screen 을 스택에 남기고 다음 화면으로 옮긴다 — 같은 화면으로 다시 이동하는
+   * 호출(예: 이미 "pricing"인데 또 navigate("pricing"))은 쌓지 않는다.
+   */
+  const navigate = (s: Screen) => {
+    setScreenHistory((h) => (screen === s ? h : [...h, screen]));
+    setWorkspace(null);
+    setUiDesignOpen(false);
+    setScreen(s);
+  };
+
+  /** 상단바 뒤로 가기 — 스택에 쌓인 "떠나기 직전 화면"으로 돌아간다. 스택이 비어 있으면
+   *  (예: 튜토리얼이 navigate 를 거치지 않고 화면을 강제로 바꾼 경우) 기존과 같이 홈으로.
+   *
+   *  설정에서 구매 페이지(요금제 변경/크레딧 충전)를 열고 온 상태(pendingSettingsReturnTab)면
+   *  일반 스택 대신 설정을 그 탭으로 다시 연다 — 설정은 화면이 아니라 오버레이라
+   *  screenHistory만으로는 "설정으로 돌아가기"를 표현할 수 없어서다. */
+  const goBack = () => {
+    if (pendingSettingsReturnTab) {
+      const tab = pendingSettingsReturnTab;
+      setPendingSettingsReturnTab(null);
+      setScreenHistory((h) => {
+        if (h.length === 0) { setScreen("home"); return h; }
+        setScreen(h[h.length - 1]);
+        return h.slice(0, -1);
+      });
+      openSettingsAt(tab);
+      return;
+    }
+    setScreenHistory((h) => {
+      if (h.length === 0) { setScreen("home"); return h; }
+      setScreen(h[h.length - 1]);
+      return h.slice(0, -1);
+    });
+  };
+
+  /** 프로필/설정/크레딧 부족 등, 앱 어디서든 "요금제 및 크레딧" 구매 페이지를 여는
+   *  단일 진입로. 설정을 거치지 않은 일반 진입이라 pendingSettingsReturnTab은 그대로
+   *  둔다(설정 쪽 헬퍼가 따로 채운다). */
+  const openPricing = (tab: PricingTab) => { setPricingTab(tab); setPricingNavKey((k) => k + 1); navigate("pricing"); };
+
+  /** 설정의 특정 탭을 바로 여는 단일 진입로(프로필의 "내역 보기 ›" 등). */
+  const openSettingsAt = (tab: SettingsTab) => {
+    setSettingsInitialTab(tab);
+    setSettingsNavKey((k) => k + 1);
+    setSettingsOpen(true);
+  };
+
+  /** 설정 탭에서 "요금제 변경"/"크레딧 충전"을 눌렀을 때 — 설정을 닫고 구매 페이지를
+   *  열되, 되돌아올 탭을 기억해 둔다(구매 완료/취소 후 goBack·"구독 정보 확인"이
+   *  같은 설정 탭으로 되돌아가게 한다 — 진입 경로 보존). */
+  const goToPurchaseFromSettings = (pricingSubTab: PricingTab, returnTab: SettingsTab) => {
+    setSettingsOpen(false);
+    setPendingSettingsReturnTab(returnTab);
+    openPricing(pricingSubTab);
+  };
+
+  /**
+   * 워크스페이스에 들어가면 사이드바를 아이콘 레일로 접고, 나오면 다시 편다.
+   * 워크스페이스는 채팅 열과 에디터 열이 가로 폭을 나눠 쓰는 화면이라 280px 을
+   * 이동 메뉴에 내주기 아깝다 — 다른 화면에서는 펼친 쪽이 기본이다.
+   *
+   * "들어갈 때/나올 때" 한 번씩만 건드리므로, 그 사이에 사용자가 직접 펴거나 접은
+   * 선택은 그대로 남는다.
+   */
+  const inWorkspace = !!workspace || editorOpen;
+  useEffect(() => { setSidebarCollapsed(inWorkspace); }, [inWorkspace]);
+
+  const isSubScreen = ["image-ai", "landing-ai", "forms-ai", "docs-ai", "audio-ai", "ppt-ai", "video-ai", "notifications-all", "search", "templates", "cardnews-editor", "request-help", "pricing", "subscription-complete", "mypage"].includes(screen);
+
+  // 튜토리얼 다시 보기(프로필 메뉴) — 홈으로 돌아가 홈 온보딩을 1단계부터 다시 띄운다(2026-10-30).
+  // 예전 작성 화면 투어(TutorialTour, 7단계)는 이 진입점에서 빠졌다 — 컴포넌트 파일은 common/ 에 남아 있다.
+  const startTutorial = () => {
+    setDrawerOpen(false);
+    setSettingsOpen(false);
+    setWorkspace(null);
+    setUiDesignOpen(false);
+    setScreen("home");
+    setOnboardingReplay((n) => n + 1);
+  };
+
+  /** 프로필 메뉴 동작: 서비스 상단바와 에디터 공통 헤더가 같이 쓴다. 다른 화면으로 가는 항목은 에디터를 닫고 간다.
+   *  문의하기·커뮤니티·로그아웃은 실제 주소·로그인 연동 전이라 안내만(2026-11-19). */
+  // 편집기를 닫거나 화면을 옮길 때마다 다시 읽는다(편집기가 이 브라우저에 저장한 목록)
+  // 사이드바 고정은 오래된 파일도 찾아야 해서 넉넉히 읽는다(최근 목록은 PlanBRecentList가 10개로 자른다)
+  const [filesTick, setFilesTick] = useState(0);
+  useEffect(() => { const on = () => setFilesTick((n) => n + 1); window.addEventListener(FILES_EVENT, on); return () => window.removeEventListener(FILES_EVENT, on); }, []);
+  const recentFiles = useMemo(() => readRecentEditorFiles(200), [docEditor, uiDesignOpen, screen, filesTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openRecentFile = (rf: RecentEditorFile) => {
+    if (rf.kind === "uidesign") { setUiInitialId(rf.id); setUiDesignOpen(true); return; }
+    setDocInitialId(rf.id);
+    setDocStart(undefined);
+    setUiDesignOpenRaw(false);
+    setDocEditor(rf.kind as DocKind);
+  };
+
+  /** 공통 헤더 앱 이름 ▾ — 이 프로젝트에 있는 편집기로 연결, 없는 도구는 안내(에디터는 닫지 않는다) */
+  const switchApp = (appId: string) => {
+    const kinds: Record<string, EditorKind> = { word: "word", hangul: "hangul", excel: "excel", ppt: "ppt", pdf: "pdf", image: "image", video: "video", uidesign: "uidesign" };
+    const k = kinds[appId];
+    if (!k) { showToast("이 도구는 아직 준비 중이에요."); return; }
+    setUiDesignOpen(false);
+    openEditor(k);
+  };
+
+  const profileMenu: React.ComponentProps<typeof ProfileMenuButton> = {
+    onCreditClick: () => { setUiDesignOpen(false); openPricing("subscription"); },
+    onHistoryClick: () => openSettingsAt("크레딧"),
+    onMyPageClick: () => { setUiDesignOpen(false); navigate("mypage"); },
+    onSettingsOpen: () => openSettingsAt("화면 설정"),
+    onStartTutorial: startTutorial,
+    onContact: () => showToast("문의하기는 준비 중이에요."),
+    onCommunity: () => showToast("커뮤니티는 준비 중이에요."),
+    onLogout: () => showToast("로그아웃은 준비 중이에요."),
+  };
 
   return (
-    <div className="bg-[#f8fafc] h-[100dvh] w-full flex flex-col overflow-hidden" style={f}>
-      <SidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} currentScreen={screen} onNavigate={setScreen} onSettingsOpen={() => setSettingsOpen(true)} />
+    /* 데스크톱은 가로 2단 — 도킹 사이드바 + 본문 컬럼. 그보다 좁으면 사이드바가
+       오버레이 드로어라 자리를 차지하지 않고, 본문 컬럼 혼자 폭을 전부 쓴다. */
+    <div className="bg-[#f8fafc] h-[100dvh] w-full flex overflow-hidden" style={f}>
+      <ToastHost />
+      {/* 편집기 안에서도 데스크톱은 서비스 사이드바를 아이콘 레일로 접어 붙여 둔다(2026-11-19, dev 화면과 같게) —
+          홈·내 작업·즐겨찾기로 바로 간다. 편집기에 들어가면 inWorkspace 효과가 레일로 접는다. 좁은 화면은 예전처럼 숨김 */}
+      {(!editorOpen || isDesktop) && <SidebarDrawer
+        // 2026-11-20: 사이드바 정리(홈 · 내 작업 · ＋ 새로 만들기 · 고정 · 최근 하나로)는 지금 홈 · B안 공통. 두 시안은 홈 메인 화면만 다르다
+        planB
+        onNewEditor={openEditor}
+        recentFiles={recentFiles}
+        onOpenRecentFile={openRecentFile}
+        variant={isDesktop ? "docked" : "drawer"}
+        open={isDesktop || drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+        // 편집기 안에서는 홈 등 어느 메뉴도 "지금 화면"으로 표시하지 않는다
+        currentScreen={editorOpen ? ("editor" as Screen) : screen}
+        onNavigate={navigate}
+        onSettingsOpen={() => openSettingsAt("화면 설정")}
+        onStartTutorial={startTutorial}
+      />}
+      {/* 본문 컬럼 — 워크스페이스가 이 안에서 absolute 로 덮으므로 relative 가 필요하다 */}
+      <div className="flex-1 min-w-0 relative flex flex-col overflow-hidden">
       <TopBar
         onMenuOpen={() => setDrawerOpen(true)}
-        onBack={() => setScreen("home")}
+        onBack={goBack}
         showBack={isSubScreen}
-        onCreditClick={() => setCreditOpen(true)}
+        brand={!isDesktop}
         onBellClick={() => setNotifOpen((v) => !v)}
+        bellRef={bellRef}
+        profileMenu={profileMenu}
       />
-      {screen === "home" && <HomeScreen onNavigate={setScreen} />}
+      {screen === "home" && homeVariant === "b" && (
+        <HomeB
+          recent={recentFiles.slice(0, 6)}
+          onOpenEditor={(k) => openEditor(k)}
+          onOpenTemplate={(tpl, withAi) => { setDocInitialId(undefined); setUiDesignOpenRaw(false); setDocStart({ template: { id: tpl.id, withAi }, key: Date.now() }); setDocEditor(tpl.kind); }}
+          onAskAi={(k, prompt) => { setDocInitialId(undefined); setUiDesignOpenRaw(false); setDocStart({ prompt, key: Date.now() }); setDocEditor(k); }}
+          onOpenRecent={openRecentFile}
+          onHelp={() => navigate("request-help")}
+          onViewAllTemplates={() => navigate("templates")}
+        />
+      )}
+      {screen === "home" && !editorOpen && !workspace && <HomeVariantSwitch value={homeVariant} onChange={setHomeVariant} />}
+      {screen === "home" && homeVariant === "a" && (
+        <HomeScreen
+          // 카드(전체 기능·대표 카테고리·바로 시작하기 캐러셀)를 눌러도 더 이상 아무
+          // 화면도 열지 않는다(2026-09-18, "템플릿을 골라 주세요" 목록 화면 제거) —
+          // 검색 결과에서 템플릿을 여는 openTemplate과는 다른, 이 진입로만 없앤다.
+          onSelectTask={() => {}}
+          // 예외: 작업별로 시작하기의 카드뉴스 카드만 카드뉴스 브리프 편집 화면을 연다(2026-10-29, 캐러셀 표지는 그대로 무반응).
+          onOpenCardNews={() => navigate("cardnews-editor")}
+          onOpenEditor={openEditor}
+          onSearch={openSearch}
+          onHelp={() => navigate("request-help")}
+          onViewAllTemplates={() => navigate("templates")}
+          autoFocusHelper={focusHelperCta}
+          onAutoFocusHelperHandled={() => setFocusHelperCta(false)}
+        />
+      )}
+      {screen === "search" && (
+        <SearchResultsScreen initialQuery={searchQuery} onBack={() => navigate("home")} onOpenTemplate={openTemplate} />
+      )}
+      {screen === "cardnews-editor" && <CardNewsEditorScreen />}
+      {screen === "templates" && (
+        <AllTemplatesScreen onBack={() => navigate("home")} onOpenTemplate={openTemplate} />
+      )}
+      {screen === "request-help" && (
+        <RequestHelpScreen
+          onBack={() => { setFocusHelperCta(true); navigate("home"); }}
+          onComplete={(handoff, wsCategory) => {
+            // 요청 작성 → 템플릿·요청 확인을 마치면 고른 템플릿의 워크스페이스로 바로 들어가,
+            // 세부 내용은 "확인이 필요해요" 카드(RequestCardsPanel)가 이어서 묻는다.
+            navigate(REQUEST_HELP_SCREEN[wsCategory]);
+            const task = getTaskById(handoff.taskId);
+            setWorkspace({
+              category: wsCategory,
+              templateName: handoff.templateTitle ?? "빈 템플릿",
+              fileType: resolveFileType(task?.tabLabel ?? "전체", CATEGORY_FILE_TYPE[wsCategory]),
+              request: handoff,
+            });
+          }}
+        />
+      )}
       {screen === "image-ai" && (
         <AIAgentScreen
           category="이미지"
           title=", 한 줄이면 충분해요"
+          desc={SERVICE_COPY.image}
           filterTabs={["전체", "이미지", "카드뉴스", "상세페이지"]}
           cards={imageAICards}
           wsCategory="image"
-          onWorkspace={(t) => setWorkspace({ category: "image", templateName: t })}
+          onWorkspace={openWorkspace("image")}
         />
       )}
       {screen === "landing-ai" && (
         <AIAgentScreen
           category="랜딩페이지"
           title=", 한 줄이면 충분해요"
+          desc={SERVICE_COPY.landing}
           filterTabs={["전체", "SaaS", "서비스", "이벤트"]}
           cards={landingAICards}
           wsCategory="landing"
-          onWorkspace={(t) => setWorkspace({ category: "landing", templateName: t })}
+          onWorkspace={openWorkspace("landing")}
         />
       )}
-      {screen === "forms-ai" && <FormsAIScreen />}
+      {screen === "forms-ai" && (
+        <FormsAIScreen
+          activeTab={formsTab}
+          onTabChange={setFormsTab}
+          sortOption={formsSort}
+          onSortChange={setFormsSort}
+          scrollTopRef={formsScrollTop}
+          onOpenForm={(id, title) => { setFillTarget({ id, title }); setScreen("forms-fill"); }}
+        />
+      )}
       {screen === "docs-ai" && (
         <AIAgentScreen
           category="문서"
           title=", 한 줄이면 충분해요"
+          desc={SERVICE_COPY.docs}
           filterTabs={["전체", "워드", "한글", "엑셀", "논문"]}
           cards={docsCards}
           cardRatio="140%"
           wsCategory="docs"
-          onWorkspace={(t) => setWorkspace({ category: "docs", templateName: t })}
+          onWorkspace={openWorkspace("docs")}
         />
       )}
       {screen === "audio-ai" && (
         <AIAgentScreen
           category="오디오"
           title=", 한 줄이면 충분해요"
+          desc={SERVICE_COPY.audio}
           filterTabs={["전체", "음악", "팟캐스트"]}
           cards={[]}
         />
@@ -3704,41 +5794,158 @@ export default function App() {
         <AIAgentScreen
           category="프레젠테이션"
           title=", 한 줄이면 충분해요"
+          desc={SERVICE_COPY.ppt}
           filterTabs={["전체", "비즈니스", "교육", "포트폴리오"]}
           cards={pptAICards}
           cardRatio="81%"
           wsCategory="ppt"
-          onWorkspace={(t) => setWorkspace({ category: "ppt", templateName: t })}
+          onWorkspace={openWorkspace("ppt")}
         />
       )}
       {screen === "video-ai" && (
         <AIAgentScreen
           category="동영상"
           title=", 한 줄이면 충분해요"
+          desc={SERVICE_COPY.video}
           filterTabs={["전체", "영상", "유튜브영상"]}
           cards={videoAICards}
           cardRatio="203%"
           wsCategory="video"
-          onWorkspace={(t) => setWorkspace({ category: "video", templateName: t })}
+          onWorkspace={openWorkspace("video")}
         />
       )}
       {screen === "favorites" && <FavoritesScreen />}
-      {screen === "mywork" && <MyWorkScreen />}
-      {screen === "home" && <Footer />}
+      {/* 내 작업(2026-11-20 다시 정리): 편집기 파일 + 대화 한 목록, 종류 칩, 고정 · 정렬 — components/mywork/MyWorkScreen.tsx. 예전 MyWorkScreen(대화만)은 아래에 남아 있다 */}
+      {screen === "mywork" && <MyWorkList chats={(() => { const co = readChatOverrides(); return myWorkItems.filter((x) => !co.hidden.includes(x.title)).map((x) => ({ title: co.renamed[x.title] ?? x.title, orig: x.title, date: x.date })); })()} onOpenFile={openRecentFile} onGoHome={() => navigate("home")} />}
+      {/* 태블릿(768~1199px)에서는 HomeScreen 이 스크롤 흐름 끝에서 직접 렌더한다. */}
+      {screen === "home" && !isTabletRange && <Footer />}
       {screen === "notifications-all" && <NotificationsAllScreen />}
-      {screen === "credit-history" && (
-        <CreditHistoryScreen onCharge={() => { setScreen("home"); setCreditOpen(true); }} />
+      {/* 요금제 및 크레딧 — 크레딧(잔액+내역)과 구독·결제(구 "구독 및 결제 관리" 화면)를
+          탭 두 개로 한 페이지에서 다룬다(같은 내용을 보여주는 화면을 두 곳에 두지 않음).
+          진입 탭·구매 화면은 pricingTab으로 정하고(프로필·크레딧 클릭은 크레딧 탭,
+          결제 실패 알림·"구독 및 결제 관리"는 구독·결제 탭, "다시 구독하기"/"크레딧
+          충전"은 구매 화면으로 바로 연다), pricingNavKey를 key로 넘겨 이미 이 화면에
+          머무는 중에 다시 openPricing()을 불러도 매번 그 탭/화면으로 확실히 연다. */}
+      {screen === "mypage" && <MyPage onOpenPricing={() => openPricing("subscription")} onOpenSettings={(t) => openSettingsAt(t)} />}
+      {screen === "pricing" && (
+        <PricingPage
+          key={pricingNavKey}
+          initialTab={pricingTab}
+          onSubscribed={(result) => { setWasPlanChange(result.isPlanChange); navigate("subscription-complete"); }}
+        />
       )}
-      {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} onViewAll={() => { setNotifOpen(false); setScreen("notifications-all"); }} />}
-      {creditOpen && <CreditBottomSheet onClose={() => setCreditOpen(false)} onHistoryClick={() => setScreen("credit-history")} />}
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {/* 구독 직후 완료 화면 — PricingPage 에서 구독 확정 시(mock) 여기로 넘어온다.
+          "구독 정보 확인"은 이제 별도 화면이 아니라 설정 > 구독·결제다. 이 구매가
+          설정에서 시작된 것이면(pendingSettingsReturnTab) 완료 후에도 그 탭으로 바로
+          이어지도록 소비하고, 아닌 일반 진입이면 처음부터 구독·결제 탭을 연다. */}
+      {screen === "subscription-complete" && (
+        <SubscriptionCompletePage
+          isPlanChange={wasPlanChange}
+          onStart={() => navigate("home")}
+          onViewDetails={() => {
+            const returnTab = pendingSettingsReturnTab ?? "구독 및 결제";
+            setPendingSettingsReturnTab(null);
+            openSettingsAt(returnTab);
+          }}
+        />
+      )}
+      {/* 워크스페이스 — 본문 컬럼만 덮는다(사이드바는 옆에 그대로 남는다).
+          TopBar 까지 덮는 것은 지금과 같다. */}
+      {uiDesignOpen && (
+        <UiDesignEditor
+          key={uiInitialId ?? "home"}
+          initialFileId={uiInitialId}
+          onBack={() => setUiDesignOpen(false)}
+          onBellClick={() => setNotifOpen(true)}
+          profileMenu={profileMenu}
+          // 편집기 바꾸기 ▾ 없음(새 파일은 사이드바 ＋): 지금 홈 · B안 공통(2026-11-20). EditorHeader는 onSwitchApp이 없으면 아이콘 + 제목, 데스크톱에서 ‹ 숨김
+          onSwitchApp={undefined}
+          onManageModels={() => openSettingsAt("AI 연결")}
+        />
+      )}
+      {docEditor && (
+        <DocEditor
+          key={`${docEditor}:${docInitialId ?? "new"}:${docStart?.key ?? 0}`}
+          kind={docEditor}
+          initialDocId={docInitialId}
+          initialTemplate={docStart?.template}
+          initialPrompt={docStart?.prompt}
+          onBack={() => setDocEditor(null)}
+          onBellClick={() => setNotifOpen(true)}
+          profileMenu={profileMenu}
+          // 편집기 바꾸기 ▾ 없음(새 파일은 사이드바 ＋): 지금 홈 · B안 공통(2026-11-20). EditorHeader는 onSwitchApp이 없으면 아이콘 + 제목, 데스크톱에서 ‹ 숨김
+          onSwitchApp={undefined}
+          onManageModels={() => openSettingsAt("AI 연결")}
+        />
+      )}
       {workspace && (
         <WorkspaceScreen
           category={workspace.category}
           templateName={workspace.templateName}
+          fileType={workspace.fileType}
+          request={workspace.request}
           onBack={() => setWorkspace(null)}
-          onCreditClick={() => setCreditOpen(true)}
+          onCreditClick={() => openPricing("subscription")}
           onBellClick={() => setNotifOpen(true)}
+        />
+      )}
+      </div>
+      {notifOpen && (isTabletUp ? (
+        <NotificationsPopover anchorRef={bellRef} onClose={() => setNotifOpen(false)} onViewAll={() => { setNotifOpen(false); navigate("notifications-all"); }} />
+      ) : (
+        <NotificationsPanel onClose={() => setNotifOpen(false)} onViewAll={() => { setNotifOpen(false); navigate("notifications-all"); }} />
+      ))}
+      {/* 시작 튜토리얼(홈 → 한글 편집기 → 템플릿 → 딸깍 AI, 3단계). 지금 홈과 B안 모두(2026-11-20). docs/starter-tour.md
+          예전 홈 온보딩(HomeOnboarding: 검색창 → 편집기 줄)은 더 띄우지 않는다. 파일은 남겨 둔다 */}
+      <StarterHome variant={homeVariant} enabled={screen === "home" && !workspace && !editorOpen && !settingsOpen} replayToken={onboardingReplay} onFollow={() => openEditor("hangul")} />
+      {settingsOpen && (
+        <SettingsModal
+          key={settingsNavKey}
+          initialTab={settingsInitialTab}
+          onClose={() => setSettingsOpen(false)}
+          onOpenTopUp={() => goToPurchaseFromSettings("topup", "크레딧")}
+          onOpenPlanChange={() => goToPurchaseFromSettings("subscription", "구독 및 결제")}
+        />
+      )}
+      {/* 서식 채우기 — 데스크톱 3단. TopBar·사이드바까지 덮는 전체 화면이라 최상단에 얹는다.
+          좌측 컬럼은 앱 공용 SidebarDrawer 를 docked 로 주입한다(서식 화면 전용 사이드바 없음). */}
+      {layerEditorOpen && (
+        <TabletMiniEditor
+          fileName="레이어 분리.png"
+          ratio="4 / 5"
+          canvasSize="1024 × 1280 px"
+          pages={4}
+          unit="슬라이드"
+          onClose={() => setLayerEditorOpen(false)}
+        />
+      )}
+      {screen === "forms-fill" && fillTarget && (
+        <FormFillDesktop
+          formId={fillTarget.id}
+          formTitle={fillTarget.title}
+          credits={creditBalance}
+          onBack={() => setScreen("forms-ai")}
+          sidebar={
+            <SidebarDrawer
+              // 2026-11-20: 서식 채우기 화면도 같은 사이드바(홈 · 내 작업 · 새로 만들기 · 고정 · 최근)
+              planB
+              onNewEditor={openEditor}
+              recentFiles={recentFiles}
+              onOpenRecentFile={openRecentFile}
+              variant="docked"
+              open
+              onClose={() => {}}
+              collapsed={sidebarCollapsed}
+              onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+              currentScreen={screen}
+              onNavigate={navigate}
+              onSettingsOpen={() => openSettingsAt("화면 설정")}
+              onStartTutorial={startTutorial}
+              recentForms={formsCards.slice(0, 4).map((c) => ({ id: c.id, title: c.title }))}
+              currentFormId={fillTarget.id}
+              onSelectForm={(id, title) => setFillTarget({ id, title })}
+            />
+          }
         />
       )}
     </div>

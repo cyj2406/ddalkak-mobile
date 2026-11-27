@@ -32,6 +32,17 @@
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.625rem;
+  /* ── 툴팁 ─────────────────────────────
+     툴팁은 영상 뷰어처럼 검은 배경 위에도 뜬다. 면이 근검정(--primary #030213)이면
+     순검정과 값이 거의 같아 통째로 묻히므로, 검정과 흰 배경 양쪽에서 모두 떠 보이는
+     슬레이트로 둔다 — 홈 프롬프트 바 설명 툴팁이 쓰던 색과 같은 값이라 앱 안의
+     툴팁 색이 하나로 모인다. 배경에 따라 색을 바꾸지는 않는다.
+     면이 스스로 분리되므로 테두리는 경계를 다듬는 정도(0.15)면 충분하다. */
+  --tooltip: #333a47;
+  --tooltip-foreground: #ffffff; /* 대비 11.4:1 */
+  --tooltip-border: rgba(255, 255, 255, 0.15);
+  --tooltip-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --tooltip-padding: 6px 10px;
   /* ── 갤러리 화면 간격 토큰 ─────────────── */
   --gap-screen-x: 16px;
   --gap-hero-top: 64px;       /* 홈 상단 flex 여백(min 48 max 120)과 동일한 느낌 */
@@ -44,6 +55,36 @@
   --gap-card-y: 14px;
   --gap-card-padding: 12px;
   --gap-grid-bottom: 32px;
+  /* ── 홈 히어로 공통 컨테이너 폭 ─────────────
+     프롬프트 입력창과 카테고리 그리드가 같은 좌우 정렬선을 쓰도록 공유하는 값.
+     모바일(<768px)은 화면 폭을 그대로 사용해 기존 레이아웃을 유지한다. */
+  --home-container: 100%;
+  /* ── 홈 섹션 간격 ─────────────
+     같은 관계는 화면 전체에서 같은 값을 쓴다(2026-10-22 통일).
+     섹션 ↔ 섹션(히어로 묶음 → 인기 템플릿 → 작업별로 시작하기)은 --home-section-gap 하나.
+     예전 --home-block-gap(44px, 히어로 → 인기 템플릿)은 이 값으로 합쳐 없앴다.
+     섹션 제목 ↔ 서브카피는 --home-title-sub, 서브카피 ↔ 콘텐츠는 --home-sub-content(HomeSectionHeader).
+     한 덩어리 안(검색창 ↔ 도움받기 배너)은 --home-cluster-gap. */
+  --home-section-gap: 80px;
+  --home-title-sub: 4px;
+  --home-sub-content: 24px;
+  --home-cluster-gap: 12px;
+  /* 홈 제목 ↔ 검색창 간격 — 섹션 사이(44px)보다는 좁고, 제목·부제 간격보다는 넓다. */
+  --gap-title-search: 26px;
+  /* ── 홈·서비스 히어로 타이포 스케일 ─────────────
+     기본값 = 지금의 모바일(≤767px) 수치. 데스크톱(≥1200px)도 이 값을 그대로 쓴다.
+     태블릿(768~1199px)만 아래 미디어 블록에서 키운다. */
+  --hero-title-size: 26px;      /* 홈 헤드라인 */
+  --hero-title-tracking: -1.5px;
+  --hero-sub-size: 13px;        /* 홈 부제 */
+  --svc-title-size: 22px;       /* 서비스·서식 헤드라인 */
+  --svc-title-tracking: -1.1px;
+  --svc-sub-size: 12.5px;       /* 서비스·서식 부제 */
+  --svc-hero-max: 100%;         /* 서비스 히어로(헤드라인·부제·입력창)의 최대 폭 */
+  --composer-ph-size: 13.5px;   /* 입력창 placeholder */
+  /* 컴포저 textarea 최대 높이. 넘어가면 내부 스크롤.
+     화면이 낮은 기기에서 입력창이 화면을 다 먹지 않도록 40vh 로도 한 번 더 조인다. */
+  --composer-max-h: min(160px, 40vh);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: #030213;
@@ -92,6 +133,243 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* 태블릿 이상: 프롬프트 입력창 + 카테고리 공통 컨테이너 폭 (좌우 정렬선 기준) */
+@media (min-width: 768px) {
+  :root { --home-container: 720px; }
+}
+@media (min-width: 1200px) {
+  :root { --home-container: 1120px; }
+}
+
+@theme {
+  /* 카테고리 8열 전환 기준점 */
+  --breakpoint-wide: 1200px;
+}
+
+/* 홈 기본 배치 (모바일 ≤767px / 데스크톱 ≥1200px).
+   .home-stack 은 display:contents 라 flex 흐름에 끼어들지 않는다 — 기존 배치 그대로.
+   아래 태블릿 블록이 이 값들을 덮으므로 반드시 이 순서를 유지할 것. */
+.home-stack { display: contents; }
+.home-body { flex: 2 1 auto; }
+.home-heading { margin-bottom: var(--gap-title-search); }
+.home-sub { margin-top: 8px; }
+
+/* ── 태블릿(768~1199px) 홈·서비스 화면 ────────────────────────────────────────
+   데스크톱 레이아웃을 폭만 줄여 쓰던 것을 태블릿 전용 스케일로 다시 잡는다.
+   이 블록 밖(모바일 ≤767px / 데스크톱 ≥1200px)은 위 기본값을 그대로 쓰므로 영향이 없다. */
+@media (min-width: 768px) {
+  :root { --composer-max-h: min(220px, 40vh); }
+}
+@media (min-width: 1200px) {
+  :root { --composer-max-h: min(280px, 40vh); }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  :root {
+    --hero-title-size: 34px;
+    --hero-title-tracking: -1.2px;
+    --hero-sub-size: 15.5px;
+    --svc-title-size: 34px;
+    --svc-title-tracking: -1.2px;
+    --svc-sub-size: 15.5px;
+    --svc-hero-max: 720px;
+    --composer-ph-size: 15px;
+    /* 좌우 24px 축 (서비스·서식 화면 전용 토큰) */
+    --gap-screen-x: 24px;
+    --gap-title-sub: 12px;      /* 헤드라인 ↔ 부제 */
+    --gap-sub-composer: 32px;   /* 부제 ↔ 입력창 */
+    --gap-composer-chips: 48px; /* 입력창 ↔ 아이콘 그리드 / 필터바 */
+    --gap-card-x: 16px;
+    --gap-card-y: 16px;
+  }
+
+  /* 홈 — 헤더·푸터를 뺀 높이의 세로 중앙에 콘텐츠를 놓는다.
+     margin-block:auto 는 남는 공간이 없으면 0 이 되므로, 콘텐츠가 길어지면
+     자동으로 상단 정렬 + 스크롤로 넘어간다(justify-content:center 의 잘림 문제 없음). */
+  .home-spacer { display: none; }
+  .home-stack {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: var(--home-container);
+    margin-inline: auto;
+    margin-block: auto;
+    padding-block: 24px;
+  }
+  .home-body { flex: 0 0 auto; }
+  .home-heading { margin-bottom: var(--gap-title-search); }
+  .home-sub { margin-top: var(--gap-title-sub); }
+}
+
+/* ── 데스크톱(≥1200px) 홈 헤드라인 ─────────────────────────────────────────────
+   기존엔 데스크톱도 모바일과 같은 26px를 그대로 썼다 — 홈 히어로 치고 작아서
+   36~40px 범위로 키운다(다른 --svc-* 화면엔 영향 없음, 홈 전용 --hero-title-size만). */
+@media (min-width: 1200px) {
+  :root {
+    --hero-title-size: 38px;
+    --hero-title-tracking: -1.4px;
+  }
+}
+
+/* ── 워크스페이스 상세 프롬프트 카드 본문 ─────────────────────────────
+   모든 입력 항목이 카드 본문 전체 폭을 쓰도록 1열로 흘려보낸다(.fc-body 는 세로 flex).
+   한 줄 입력(.fc-single = FcInput·FcSelect)만 반 폭으로 두면 텍스트영역과
+   오른쪽 정렬선이 어긋나 들쭉날쭉해 보이므로, 폭 기준을 full-width 하나로 통일한다.
+   좌우 패딩은 .fc-body 자체(px-[18px] / md:px-6)가 잡으므로 필드별 여백은 그대로다.
+   두 열이 필요한 개별 그룹은 해당 그룹 안에서 자체 그리드를 구성한다
+   (예: 랜딩 카드의 제목·버튼 행). */
+.fc-body > * {
+  min-width: 0;
+  /* .fc-body 는 세로 flex + overflow-y:auto 다. 자식이 기본값(flex-shrink:1)이면
+     내용이 카드 최대 높이를 넘칠 때 세로로 스크롤되지 않고 자식들이 납작하게 눌린다
+     (섹션 칩 줄이 36px → 19px 로 찌그러져 칩 테두리가 위아래로 잘리던 원인).
+     자식이 제 높이를 지키게 두고, 넘치는 만큼은 .fc-body 가 스크롤로 처리한다. */
+  flex-shrink: 0;
+}
+
+/* ── 정렬 메뉴 ────────────────────────────────────────────────────────────────
+   표현(체크 왼쪽·선택색 없음·항목 높이 48px)은 전 뷰포트 동일하고,
+   담는 그릇만 갈린다 — 600px 미만은 바텀시트, 그 이상은 트리거에 앵커된 팝오버.
+   컴포넌트는 SortMenu 하나뿐이라 표현이 다시 어긋날 자리가 없다. */
+@keyframes sortMenuFade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes sortMenuPop { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes sortMenuSlideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+
+/* 팝오버(600px 이상)에서는 바깥 클릭만 받는 투명 레이어 */
+.sort-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+.sort-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 51;
+  width: 220px;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0px 12px 32px rgba(16, 24, 40, 0.12);
+  animation: sortMenuPop 140ms ease-out;
+}
+/* 드래그 핸들은 바텀시트에만 있는 손잡이라 팝오버에서는 숨긴다 */
+.sort-menu-handle { display: none; }
+
+.sort-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background-color 120ms ease;
+}
+.sort-menu-item:hover { background: #f1f5f9; }
+.sort-menu-item:active { background: #e8edf3; }
+.sort-menu-item:focus-visible {
+  outline: 2px solid #4f7bff;
+  outline-offset: -2px;
+}
+/* 체크 자리는 선택 여부와 무관하게 항상 차지한다 — 글자 시작선이 흔들리지 않게 */
+.sort-menu-check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+/* 선택 표시는 체크 하나로 끝낸다. 글자색은 선택 여부와 무관하게 같은 값 */
+.sort-menu-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  letter-spacing: -0.3px;
+  color: #1e293b;
+}
+
+@media (max-width: 600px) {
+  .sort-menu-backdrop {
+    background: rgba(0, 0, 0, 0.35);
+    animation: sortMenuFade 180ms ease;
+  }
+  .sort-menu {
+    position: fixed;
+    inset: auto 0 0 0;
+    width: auto;
+    padding: 0 8px;
+    /* 마지막 항목 아래 여백은 홈 인디케이터 몫만 남긴다 */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border: none;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0px -4px 24px rgba(0, 0, 0, 0.1);
+    animation: sortMenuSlideUp 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .sort-menu-handle {
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 10px auto 6px;
+    border-radius: 2px;
+    background: #dfe6ed;
+  }
+  .sort-menu-item { min-height: 52px; }
+  .sort-menu-label { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sort-menu, .sort-menu-backdrop { animation: none; }
+}
+
+/* ── 필터 메뉴 (내 작업 · 즐겨찾기) ───────────────────────────────────────────
+   전 뷰포트 같은 앵커 드롭다운이다. 바텀시트로 갈리지 않고, 항목 문구·선택 표시도
+   폭에 따라 달라지지 않는다. 폭으로 갈리는 것은 항목 높이 하나뿐이고
+   그마저 브레이크포인트가 아니라 입력 방식(pointer: coarse)으로 나눈다. */
+.filter-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 51;
+  width: 200px;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0px 12px 32px rgba(16, 24, 40, 0.12);
+  animation: sortMenuPop 140ms ease-out;
+  /* 항목이 일곱 개라 좁은 화면에서는 아래로 넘칠 수 있다 — 메뉴 안에서 스크롤시킨다 */
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.filter-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  /* 마우스 기준 44px, 손가락으로 누르는 환경에서는 48px */
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background-color 120ms ease;
+}
+@media (pointer: coarse) {
+  .filter-menu-item { min-height: 48px; }
+}
+.filter-menu-item:hover { background: #f1f5f9; }
+.filter-menu-item:active { background: #e8edf3; }
+.filter-menu-item:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.filter-menu-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  letter-spacing: -0.3px;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -101,6 +379,10 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
+  --color-tooltip-border: var(--tooltip-border);
+  --shadow-tooltip: var(--tooltip-shadow);
   --color-brand: var(--brand);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -194,3 +476,265 @@
     line-height: 1.5;
   }
 }
+
+/* 컴포저 하단 칩 줄 — 가로 스크롤은 살리고 스크롤바만 감춘다(전송 버튼은 이 영역 밖에 고정). */
+.composer-chips-scroll::-webkit-scrollbar { display: none; }
+
+/* 공용 InputField — 칸 안 스크롤바는 얇게, 마우스를 올리거나 입력 중일 때만 보인다(InputField.tsx). */
+.ui-field-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.ui-field-scroll:hover, .ui-field-scroll:focus { scrollbar-color: #cbd5e1 transparent; }
+.ui-field-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.ui-field-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.ui-field-scroll:hover::-webkit-scrollbar-thumb, .ui-field-scroll:focus::-webkit-scrollbar-thumb { background: #cbd5e1; }
+/* 여러 줄 칸이 실제로 넘칠 때(AutoGrowTextarea 가 data-overflow 를 단다)는 hover·포커스와 무관하게 늘 보인다 — "내용이 더 있음"을 스크롤바 하나로 알린다 */
+.ui-field-scroll[data-overflow="true"] { scrollbar-color: #cbd5e1 transparent; }
+.ui-field-scroll[data-overflow="true"]::-webkit-scrollbar-thumb { background: #cbd5e1; }
+/* 패널 스크롤(2026-11-19, 에디터 레이어·대화·속성·홈 등) — 늘 떠 있는 회색 막대가 패널마다 겹쳐 복잡해 보여서,
+   마우스를 올렸을 때만 얇게(6px) 보인다. 입력칸이 아닌 영역용이라 .ui-field-scroll 과 이름을 나눴다. */
+.ui-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.ui-scroll:hover { scrollbar-color: #cbd5e1 transparent; }
+.ui-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.ui-scroll::-webkit-scrollbar-track { background: transparent; }
+.ui-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.ui-scroll:hover::-webkit-scrollbar-thumb { background: #cbd5e1; }
+/* 공용 InputField 상태(2026-10-16) — 셀렉트·한 줄·여러 줄 칸이 같은 규칙을 쓴다.
+   - 바탕은 상태와 무관하게 고정(값이 차도 바뀌지 않는다). 빈 칸/채운 칸은 placeholder 색과 글자 색으로만 구분.
+   - 포커스: 테두리를 브랜드색으로 + 1px 브랜드색 링(합쳐 2px 브랜드 테두리, 바탕 대비 약 3.7:1). 키보드 포커스도 같다.
+   - 칸에 인라인 border 가 있어 위의 전역 input:focus-visible 규칙이 테두리를 못 바꾸므로 !important.
+   - .ui-field: 자기 자신이 상자인 요소(input·textarea·select·트리거 버튼) / .ui-field-within: 안에 입력을 품은 상자(스테퍼·참고 자료). */
+.ui-field:focus-visible,
+.ui-field-within:focus-within {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 1px var(--brand) !important;
+  outline: none !important;
+}
+/* 오류가 있는 칸(aria-invalid)은 포커스 중에도 오류색 테두리·링 — 파란 포커스가 오류 표시를 덮지 않게(기존 오류 토큰 --destructive) */
+.ui-field[aria-invalid="true"]:focus-visible {
+  border-color: var(--destructive) !important;
+  box-shadow: 0 0 0 1px var(--destructive) !important;
+}
+/* 브라우저 자동 완성(크롬 autofill)이 칸을 파란 바탕으로 칠하지 않게 — 크롬은 자동 완성 바탕을 !important 로 칠해
+   바탕색으로는 못 덮는다. 칸 안쪽을 칸 바탕색(#f8fafc = color.surface.subtle, InputField FIELD_SURFACE)의 inset 그림자로 덮고,
+   포커스 중이면 그 위에 같은 1px 브랜드 링을 더한다. 글자색도 크롬 기본 대신 원래 글자색. */
+.ui-field:-webkit-autofill,
+.ui-field:-webkit-autofill:hover,
+.ui-field-within input:-webkit-autofill,
+.ui-field-within input:-webkit-autofill:hover,
+.ui-field-within input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #f8fafc inset !important;
+  box-shadow: 0 0 0 1000px #f8fafc inset !important;
+  -webkit-text-fill-color: currentColor !important;
+  caret-color: currentColor;
+}
+.ui-field:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #f8fafc inset, 0 0 0 1px var(--brand) !important;
+  box-shadow: 0 0 0 1000px #f8fafc inset, 0 0 0 1px var(--brand) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+/* 한 줄 입력 placeholder — 글자 크기·색은 InputField 가 CSS 변수로 넘긴다 */
+.ui-field-ph::placeholder { font-size: var(--ph-size, inherit); font-weight: var(--ph-weight, inherit); color: var(--ph-color, #9ca3af); opacity: 1; }
+
+/* ── 홈 "바로 시작하기 좋은 템플릿" 캐러셀 — 이전/다음 버튼 ─────────────────────
+   호버 가능한 포인터(마우스)에서는 평소 숨기고, 캐러셀 뷰포트(.carousel-viewport)
+   위에 마우스가 있거나 내부에 키보드 포커스가 들어와 있을 때만 보인다. 버튼 자신
+   위로 마우스를 옮겨도 뷰포트의 자식이라 :hover가 계속 유지된다(별도 처리 불필요).
+   호버 개념이 없는 터치 등에서는 이 미디어 쿼리 자체가 적용되지 않아 항상 보인다
+   (스와이프는 그대로 네이티브 동작). 처음/끝 위치의 옅어짐(--nav-enabled-opacity,
+   컴포넌트가 disabled일 때 인라인으로 내려준다)과 호버 노출은 서로 다른 opacity라
+   calc()로 곱해서 하나의 값으로 합친다 — 회전운동을 위해서. */
+.carousel-nav-btn {
+  --nav-hover-visible: 1;
+  opacity: calc(var(--nav-hover-visible) * var(--nav-enabled-opacity, 1));
+  transition: opacity 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .carousel-nav-btn {
+    --nav-hover-visible: 0;
+    pointer-events: none;
+  }
+  .carousel-viewport:hover .carousel-nav-btn,
+  .carousel-viewport:focus-within .carousel-nav-btn {
+    --nav-hover-visible: 1;
+    pointer-events: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .carousel-nav-btn { transition: none; }
+}
+
+/* ── 홈 "바로 시작하기 좋은 템플릿" 캐러셀 — 카드 호버 리프트 ────────────────────
+   이미지 프레임(.template-card-media)에만 transform을 줘서 카드 전체(.template-card,
+   이미지가 곧 클릭 영역)의 크기·위치는 그대로다. 호버(실제 정밀 포인터)와
+   키보드 포커스를 서로 다른 트리거로 분리한다 — 포커스는 움직임 없이 테두리·그림자만,
+   호버는 거기에 4px 들림을 더한다. 그림자는 기존 하나(0 4px 16px)에서 한 단계만
+   강해진다(0 10px 26px, 같은 브랜드 톤 계열로 alpha만 살짝 올림). prefers-reduced-motion
+   에서는 호버해도 들림(transform)만 빠지고 테두리·그림자 변화는 그대로 남는다. */
+.template-card-media {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1), border-color 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.template-card:focus-visible .template-card-media {
+  border-color: #4f7bff;
+  box-shadow: 0 4px 16px rgba(79, 123, 255, 0.16);
+}
+@media (hover: hover) and (pointer: fine) {
+  .template-card:hover .template-card-media {
+    border-color: #4f7bff;
+    box-shadow: 0 10px 26px rgba(79, 123, 255, 0.2);
+  }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .template-card:hover .template-card-media {
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .template-card-media { transition: box-shadow 160ms ease, border-color 160ms ease; }
+}
+
+/* ── 캐러셀 카드 이름 라벨 — 이미지 안쪽 하단 오버레이(2026-09-18, 상시 캡션 대체) ──
+   평소엔 opacity:0이라 카드 높이·여백을 차지하지 않는다. 호버(들림과 달리 포인터
+   종류 제한 없이 전부)와 키보드 포커스 둘 다에서 보인다 — 이름 확인은 이동(들림)과
+   달리 터치에서도 의미가 있지만, 터치는 hover 자체가 없어 CSS만으로는 켜지지 않는다
+   (탭은 이 라벨과 무관하게 곧바로 onClick을 실행한다). */
+.template-card-label {
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.template-card:focus-visible .template-card-label {
+  opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .template-card:hover .template-card-label {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .template-card-label { transition: none; }
+}
+
+/* ── "전체 기능" 카테고리 카드 — 일러스트 흔들림(hover) ────────────────────────
+   카드 배경·테두리·제목·설명은 그대로 두고 일러스트 래퍼(.task-illustration-wobble)
+   에만 하단 중앙 기준 작은 회전·들림을 준다. 원본 <img>의 기존 scale 보정(별도 요소)
+   과는 충돌하지 않는다. 부모(.task-illustration-hover — "전체 기능" grid variant·
+   활성(준비 중 아님) 카드에만 붙는다, TaskGrid.tsx 참고)에 실제 호버 가능한 정밀
+   포인터로 마우스가 올라와 있는 "동안" 계속 유지되는 transition이다(2026-10-01,
+   한 번 재생되고 호버 중에도 0도로 되돌아오던 1회성 keyframe 애니메이션 대신 — 마우스를
+   올려 둔 채로도 계속 살짝 기울어져 있어야 "움직이는 인터렉션"으로 느껴진다). 호버가
+   풀리면 같은 transition으로 부드럽게 0도로 되돌아온다. */
+.task-illustration-wobble {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .task-illustration-hover:hover .task-illustration-wobble {
+    transform: rotate(-2.5deg) translateY(-2px);
+  }
+}
+/* 카드 자체(배경·테두리)에 hover 신호가 전혀 없던 grid 카드를 위한, reduced-motion
+   전용 대체 신호 — box-shadow는 인라인(TaskCard의 boxShadow 계산)이 var()를 참조하는
+   형태로 내려줘야 여기서 값을 채울 수 있다(인라인 스타일이 항상 CSS 클래스보다 우선
+   하는 문제를 피하기 위함, Button.tsx와 같은 이유). */
+@media (prefers-reduced-motion: reduce) {
+  .task-illustration-hover:hover {
+    --task-hover-shadow: 0 3px 10px rgba(26, 29, 41, 0.1);
+  }
+}
+
+/* ── 홈 추천 서식 캐러셀 마퀴 ─────────────────────────────────────────────────
+   트랙에는 카드 목록을 두 번 이어 붙여 렌더한다 — 50% 지점에서 멈추면 원본 목록 하나만큼
+   움직인 것과 같아 이음매 없이 반복된다. */
+@keyframes home-carousel-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* ── Interaction Layer: 순수 input/textarea/select 공통 상태 ───────────────────
+   앱 전역(템플릿 생성 폼 등)에 흩어진 input/textarea/select 대부분이 outline-none만
+   있고 hover/focus/disabled 표시가 전혀 없었다. 화면마다 className을 따로 손보는 대신
+   여기 한 번으로 전체에 적용한다 — 각 입력마다 이미 Tailwind의 개별 border-color
+   유틸(예: border-[#e2e8f0])이 있어도, 아래 pseudo-class 선택자가 특이도상 항상
+   이긴다(엘리먼트+가상클래스가 단일 클래스 선택자보다 더 구체적이다). 이미 자체 포커스
+   처리를 하는 컴포넌트(Button/ScrollableChips 등은 버튼이라 대상 아님)에는 영향 없다. */
+/* 브라우저 자동 완성(이메일 등)이 넣는 하늘색 바탕을 지운다(2026-11-20 공유 창 오류: 둥근 칸 안에 각진 하늘색 상자가 생겼다).
+   칸 바탕을 흰색으로 덮고 글자색을 지킨다 */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  -webkit-text-fill-color: #111827;
+  caret-color: #111827;
+  transition: background-color 9999s ease-out 0s;
+}
+/* .field-inline — 자기 자신은 테두리가 없고(border:0), 검색창처럼 감싸는 pill
+   컨테이너가 시각적 필드 역할을 하는 input에 붙인다. 이 클래스가 있으면 아래
+   input 단위 규칙에서 빠지고, 대신 감싸는 요소에 .field-pill을 붙여 그쪽에서
+   :focus-within으로 표시한다 — 안 그러면 둥근 pill 안에 각진 포커스 박스가
+   따로 떠서 어색해진다(실제로 이 문제가 있었다: 홈/검색결과 화면 검색창). */
+input:not([type="checkbox"]):not([type="radio"]):not(.field-inline),
+textarea:not(.field-inline),
+select:not(.field-inline) {
+  transition: border-color 160ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 160ms cubic-bezier(0.4, 0, 0.2, 1), background-color 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+input:not([type="checkbox"]):not([type="radio"]):not(.field-inline):not(:disabled):hover,
+textarea:not(.field-inline):not(:disabled):hover,
+select:not(.field-inline):not(:disabled):hover {
+  border-color: #cbd5e1;
+}
+input:not([type="checkbox"]):not([type="radio"]):not(.field-inline):focus-visible,
+textarea:not(.field-inline):focus-visible,
+select:not(.field-inline):focus-visible {
+  border-color: #4f7bff;
+  box-shadow: 0 0 0 2px rgba(79, 123, 255, 0.16);
+  outline: none;
+}
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background-color: #f8fafc;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: reduce) {
+  input, textarea, select { transition: none; }
+}
+
+/* .field-pill — .field-inline input을 감싸는 pill 컨테이너. 안의 input이 포커스를
+   받으면 pill 테두리 전체를 강조한다(각진 박스 대신 pill 모양 그대로). */
+.field-pill {
+  transition: border-color 160ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.field-pill:focus-within {
+  border-color: #4f7bff !important;
+  box-shadow: 0 0 0 2px rgba(79, 123, 255, 0.16);
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-pill { transition: none; }
+}
+
+/* 워크스페이스 컴포저(ComposerCard "plain") — 안의 textarea가 포커스를 받으면 카드
+   테두리 전체를 브랜드색으로 강조한다. 홈 메인 컴포저("focus" variant)는 이미 항상
+   파란 테두리라 별도 처리가 필요 없다. */
+.composer-card-plain {
+  transition: border-color 160ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.composer-card-plain:focus-within {
+  border-color: #4f7bff;
+  box-shadow: 0px 2px 20px rgba(0, 0, 0, 0.09), 0 0 0 2px rgba(79, 123, 255, 0.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-card-plain { transition: none; }
+}
+
+/* 시작 튜토리얼(onboarding/Coachmark.tsx): 말풍선 등장, 누를 곳 반짝임 */
+@keyframes starter-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes starter-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(79, 123, 255, 0.55) } 70% { box-shadow: 0 0 0 8px rgba(79, 123, 255, 0) } }
+/* 모서리는 대상 자신의 둥글기를 따른다(템플릿 카드는 미리보기 그림 칸만 감싼다) */
+[data-starter-pulse] { position: relative; animation: starter-pulse 1.6s ease-out infinite; outline: 2px solid #4f7bff; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { [data-starter-pulse] { animation: none; } }
+/* 건너뛴 사람용 파란 점 힌트(편집기 상단 [템플릿] · [딸깍 AI]) */
+@keyframes hint-dot { 0%, 100% { box-shadow: 0 0 0 0 rgba(79, 123, 255, 0.5) } 70% { box-shadow: 0 0 0 6px rgba(79, 123, 255, 0) } }
+.hint-dot { animation: hint-dot 1.8s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .hint-dot { animation: none; } }
